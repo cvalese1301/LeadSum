@@ -59,13 +59,24 @@ function token() {
   return getEnv("META_ACCESS_TOKEN");
 }
 
+function extractTokenFromReq(req) {
+  const authHeader = req.headers["authorization"] || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  if (req.headers["x-meta-token"]) {
+    return String(req.headers["x-meta-token"]).trim();
+  }
+  return token();
+}
 
 async function graph(pathname, params = {}, accessToken = token()) {
   if (!accessToken) {
-    const error = new Error("META_ACCESS_TOKEN mancante nel file .env");
-    error.status = 400;
+    const error = new Error("Token di accesso Meta non fornito. Effettua il login.");
+    error.status = 401;
     throw error;
   }
+
 
   const url = new URL(`${GRAPH_BASE}/${pathname.replace(/^\//, "")}`);
   Object.entries(params).forEach(([key, value]) => {
@@ -244,26 +255,18 @@ async function readJsonBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
-async function listAdAccounts() {
-  if (!token()) {
-    return [
-      {
-        id: "act_demo_123456789",
-        account_id: "demo_123456789",
-        name: "Account Demo - Lead Intelligence",
-        account_status: 1,
-        currency: "EUR",
-        timezone_name: "Europe/Rome",
-        isDemo: true
-      }
-    ];
+async function listAdAccounts(accessToken = token()) {
+  if (!accessToken) {
+    return [];
   }
 
   const payload = await graph("/me/adaccounts", {
-    fields: "id,account_id,name,account_status,currency,timezone_name"
-  });
+    fields: "id,account_id,name,account_status,currency,timezone_name",
+    limit: "100"
+  }, accessToken);
   return payload.data || [];
 }
+
 
 function parseInsightsMetrics(row = {}) {
   const spend = parseFloat(row.spend || 0);
@@ -837,7 +840,7 @@ function getDemoDailyTrendData(datePreset = "last_7d") {
   return list;
 }
 
-async function fetchLiveInsightsSummary(accountId, query = {}) {
+async function fetchLiveInsightsSummary(accountId, query = {}, accessToken = token()) {
   const datePreset = query.datePreset || "last_7d";
   const since = query.since;
   const until = query.until;
@@ -850,19 +853,19 @@ async function fetchLiveInsightsSummary(accountId, query = {}) {
   }
 
   const [accountInfo, campaignsRes, adsetsRes, adsRes] = await Promise.all([
-    graph(`/${accountId}`, { fields: "id,account_id,name,currency,timezone_name,account_status" }),
+    graph(`/${accountId}`, { fields: "id,account_id,name,currency,timezone_name,account_status" }, accessToken),
     graph(`/${accountId}/campaigns`, {
       fields: "id,name,status,effective_status,objective,daily_budget,lifetime_budget,budget_remaining,buying_type,created_time,updated_time",
       limit: "200"
-    }),
+    }, accessToken),
     graph(`/${accountId}/adsets`, {
       fields: "id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget,budget_remaining,optimization_goal,billing_event,bid_amount,created_time,updated_time",
       limit: "250"
-    }),
+    }, accessToken),
     graph(`/${accountId}/ads`, {
       fields: "id,name,status,effective_status,campaign_id,adset_id,creative{id,name,title,body,image_url,thumbnail_url,object_story_id,instagram_permalink_url},created_time,updated_time",
       limit: "300"
-    })
+    }, accessToken)
   ]);
 
   const campaigns = campaignsRes.data || [];
@@ -875,33 +878,33 @@ async function fetchLiveInsightsSummary(accountId, query = {}) {
     graph(`/${accountId}/insights`, {
       ...timeParams,
       fields: "spend,impressions,clicks,reach,ctr,cpc,cpm,frequency,actions,cost_per_action_type"
-    }).catch(() => ({ data: [] })),
+    }, accessToken).catch(() => ({ data: [] })),
     graph(`/${accountId}/insights`, {
       date_preset: "today",
       fields: "spend,actions"
-    }).catch(() => ({ data: [] })),
+    }, accessToken).catch(() => ({ data: [] })),
     graph(`/${accountId}/insights`, {
       date_preset: "yesterday",
       fields: "spend,actions"
-    }).catch(() => ({ data: [] })),
+    }, accessToken).catch(() => ({ data: [] })),
     graph(`/${accountId}/insights`, {
       ...timeParams,
       level: "campaign",
       fields: "campaign_id,campaign_name,spend,impressions,clicks,reach,ctr,cpc,cpm,actions,cost_per_action_type",
       limit: "200"
-    }).catch(() => ({ data: [] })),
+    }, accessToken).catch(() => ({ data: [] })),
     graph(`/${accountId}/insights`, {
       ...timeParams,
       level: "adset",
       fields: "adset_id,adset_name,campaign_id,spend,impressions,clicks,reach,ctr,cpc,cpm,actions,cost_per_action_type",
       limit: "250"
-    }).catch(() => ({ data: [] })),
+    }, accessToken).catch(() => ({ data: [] })),
     graph(`/${accountId}/insights`, {
       ...timeParams,
       level: "ad",
       fields: "ad_id,ad_name,adset_id,campaign_id,spend,impressions,clicks,reach,ctr,cpc,cpm,actions,cost_per_action_type",
       limit: "300"
-    }).catch(() => ({ data: [] }))
+    }, accessToken).catch(() => ({ data: [] }))
   ]);
 
   const todayCampaignInsightsRes = await graph(`/${accountId}/insights`, {
@@ -909,7 +912,7 @@ async function fetchLiveInsightsSummary(accountId, query = {}) {
     level: "campaign",
     fields: "campaign_id,spend,actions",
     limit: "200"
-  }).catch(() => ({ data: [] }));
+  }, accessToken).catch(() => ({ data: [] }));
 
   const todayCampaignMap = {};
   (todayCampaignInsightsRes.data || []).forEach(row => {
@@ -1185,6 +1188,78 @@ async function applyRuleToCreatedAds(accountId, ruleId, adIds) {
 
 async function handleApi(req, res, url) {
   try {
+    const userToken = extractTokenFromReq(req);
+
+    // Auth 1: Validate session / Get user profile
+    if (url.pathname === "/api/auth/me") {
+      const appId = getEnv("META_APP_ID", "1487594375621582");
+      if (!userToken) {
+        return json(res, 200, { authenticated: false, appId });
+      }
+
+      try {
+        const userRes = await graph("/me", { fields: "id,name,picture{url}" }, userToken);
+        return json(res, 200, {
+          authenticated: true,
+          appId,
+          user: {
+            id: userRes.id,
+            name: userRes.name,
+            picture: userRes.picture?.data?.url || null
+          }
+        });
+      } catch (err) {
+        return json(res, 200, {
+          authenticated: false,
+          appId,
+          error: err.message
+        });
+      }
+    }
+
+    // Auth 2: Exchange Facebook Login Token
+    if (url.pathname === "/api/auth/facebook-login" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      const incomingToken = body.accessToken;
+      const appId = getEnv("META_APP_ID", "1487594375621582");
+      const appSecret = getEnv("META_APP_SECRET", "c5bdacb60e9268b584c504403eb452d1");
+
+      if (!incomingToken) {
+        return json(res, 400, { error: "Access token non fornito" });
+      }
+
+      try {
+        let finalToken = incomingToken;
+        if (appSecret) {
+          try {
+            const exchangeRes = await fetch(`https://graph.facebook.com/${API_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${incomingToken}`);
+            const exchangeData = await exchangeRes.json();
+            if (exchangeData.access_token) {
+              finalToken = exchangeData.access_token;
+            }
+          } catch (e) {
+            console.warn("Could not exchange for long lived token:", e.message);
+          }
+        }
+
+        const userRes = await graph("/me", { fields: "id,name,picture{url}" }, finalToken);
+        return json(res, 200, {
+          ok: true,
+          accessToken: finalToken,
+          user: {
+            id: userRes.id,
+            name: userRes.name,
+            picture: userRes.picture?.data?.url || null
+          }
+        });
+      } catch (err) {
+        return json(res, 401, {
+          ok: false,
+          error: `Login Meta non riuscito: ${err.message}`
+        });
+      }
+    }
+
     // 0. Client Overview (Dashboard multi-account)
     if (url.pathname === "/api/meta/insights/clients-overview") {
       const accountIdsParam = url.searchParams.get("accountIds");
@@ -1196,13 +1271,13 @@ async function handleApi(req, res, url) {
       let targetAccounts = [];
       if (accountIdsParam) {
         const ids = accountIdsParam.split(",").map(s => s.trim()).filter(Boolean);
-        const allAccs = await listAdAccounts().catch(() => []);
+        const allAccs = await listAdAccounts(userToken).catch(() => []);
         targetAccounts = allAccs.filter(a => ids.includes(a.id));
       } else {
-        targetAccounts = await listAdAccounts().catch(() => []);
+        targetAccounts = await listAdAccounts(userToken).catch(() => []);
       }
 
-      if (targetAccounts.length === 0 && !token()) {
+      if (targetAccounts.length === 0 && !userToken) {
         const demo = getDemoInsightsData(datePreset);
         return json(res, 200, {
           isDemo: true,
@@ -1315,19 +1390,19 @@ async function handleApi(req, res, url) {
               ...timeParams,
               fields: "spend,actions",
               limit: "5"
-            }).catch(() => ({ data: [] })),
+            }, userToken).catch(() => ({ data: [] })),
 
             graph(`/${acc.id}/campaigns`, {
               fields: "id,name,status,effective_status,daily_budget",
               effective_status: "['ACTIVE']",
               limit: "100"
-            }).catch(() => ({ data: [] })),
+            }, userToken).catch(() => ({ data: [] })),
 
             graph(`/${acc.id}/adsets`, {
               fields: "id,name,campaign_id,status,effective_status,daily_budget",
               effective_status: "['ACTIVE']",
               limit: "100"
-            }).catch(() => ({ data: [] }))
+            }, userToken).catch(() => ({ data: [] }))
           ]);
 
           const parsed = parseInsightsMetrics(insightsRes.data?.[0] || {});
@@ -1421,7 +1496,7 @@ async function handleApi(req, res, url) {
       }
 
       try {
-        const summary = await fetchLiveInsightsSummary(accountId, { datePreset, since, until });
+        const summary = await fetchLiveInsightsSummary(accountId, { datePreset, since, until }, userToken);
         return json(res, 200, summary);
       } catch (error) {
         console.warn("Live insights error, returning fallback demo data:", error.message);
@@ -1438,12 +1513,12 @@ async function handleApi(req, res, url) {
       const since = url.searchParams.get("since");
       const until = url.searchParams.get("until");
 
-      if (accountId.startsWith("act_demo") || accountId === "demo" || !token()) {
+      if (accountId.startsWith("act_demo") || accountId === "demo" || !userToken) {
         return json(res, 200, { dailyTrends: getDemoDailyTrendData(datePreset) });
       }
 
       try {
-        const dailyTrends = await fetchLiveDailyTrend(accountId, { datePreset, since, until });
+        const dailyTrends = await fetchLiveDailyTrend(accountId, { datePreset, since, until }, userToken);
         return json(res, 200, { dailyTrends });
       } catch (error) {
         console.warn("Live daily trend error, returning fallback demo trend:", error.message);
@@ -1460,11 +1535,11 @@ async function handleApi(req, res, url) {
         return json(res, 400, { error: "Parametri mancanti: adId e status sono obbligatori" });
       }
 
-      if (adId.startsWith("ad_demo") || !token()) {
+      if (adId.startsWith("ad_demo") || !userToken) {
         return json(res, 200, { ok: true, adId, status, message: `Stato inserzione demo aggiornato a ${status}` });
       }
 
-      const response = await graphPost(`/${adId}`, { status });
+      const response = await graphPost(`/${adId}`, { status }, userToken);
       return json(res, 200, { ok: true, adId, status, meta: response });
     }
 
@@ -1489,13 +1564,13 @@ async function handleApi(req, res, url) {
             creativeParams.source_instagram_media_id = post.sourcePostId;
           }
 
-          const creative = await graphPost(`/${body.adAccountId}/adcreatives`, creativeParams);
+          const creative = await graphPost(`/${body.adAccountId}/adcreatives`, creativeParams, userToken);
           const ad = await graphPost(`/${body.adAccountId}/ads`, {
             name: post.adName,
             adset_id: post.adsetId,
             creative: { creative_id: creative.id },
             status: body.status || "PAUSED"
-          });
+          }, userToken);
 
           results.push({
             ok: true,
@@ -1553,7 +1628,7 @@ async function handleApi(req, res, url) {
       let adAccounts = [];
       let adAccountsError = null;
       try {
-        adAccounts = await listAdAccounts();
+        adAccounts = await listAdAccounts(userToken);
       } catch (error) {
         adAccountsError = error.message;
         adAccounts = [
@@ -1571,7 +1646,7 @@ async function handleApi(req, res, url) {
       return json(res, 200, {
         apiVersion: API_VERSION,
         loginConfigId: getEnv("META_LOGIN_CONFIG_ID", null),
-        hasToken: Boolean(token()),
+        hasToken: Boolean(userToken),
         ...configuredSources(),
         adAccounts,
         adAccountsError

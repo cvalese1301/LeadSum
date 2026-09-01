@@ -603,6 +603,195 @@ body {
   text-transform: uppercase;
 }
 
+/* ==========================================================================
+   Login Screen & Auth Styles
+   ========================================================================== */
+
+.login-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(8, 10, 15, 0.92);
+  backdrop-filter: blur(16px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-lg);
+  max-width: 440px;
+  width: 100%;
+  padding: 32px 28px;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+  animation: fadeInScale 0.25s ease-out;
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.login-brand-icon {
+  font-size: 2.4rem;
+  margin-bottom: 8px;
+}
+
+.login-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.login-tag {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-bottom: 20px;
+}
+
+.login-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-info-text {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.btn-facebook-login {
+  background: #1877f2;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 12px 20px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 12px rgba(24, 119, 242, 0.35);
+}
+
+.btn-facebook-login:hover {
+  background: #166fe5;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(24, 119, 242, 0.45);
+}
+
+.login-error-alert {
+  background: var(--color-rose-bg);
+  border: 1px solid var(--color-rose);
+  color: #fca5a5;
+  font-size: 0.8rem;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.manual-token-section {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.btn-token-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s ease;
+}
+
+.btn-token-toggle:hover {
+  color: var(--text-muted);
+}
+
+.manual-token-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.manual-token-box input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.login-card-foot {
+  margin-top: 24px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+/* User Profile Badge in Header */
+.user-profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 3px 10px 3px 4px;
+  font-size: 0.8rem;
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-name {
+  color: #fff;
+  font-weight: 600;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-logout {
+  background: transparent;
+  border: none;
+  color: var(--color-rose);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+
+.btn-logout:hover {
+  background: var(--color-rose-bg);
+}
+
 .sub-table td {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border-subtle);

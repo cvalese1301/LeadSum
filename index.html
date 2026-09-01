@@ -10,8 +10,47 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
+    <!-- Meta Facebook Login Screen Overlay -->
+    <div id="loginScreen" class="login-overlay" style="display: none;">
+      <div class="login-card">
+        <div class="login-brand-icon">📊</div>
+        <h2 class="login-title">LeadSum</h2>
+        <p class="login-tag">Meta Ads Multi-Client Performance Intelligence</p>
+        
+        <div class="login-body">
+          <p class="login-info-text">
+            Effettua l'accesso con il tuo account Facebook per visualizzare i tuoi clienti, monitorare i contatti e analizzare le campagne attive.
+          </p>
+
+          <button class="btn btn-facebook-login" id="btnFacebookLogin" type="button">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            <span>Accedi con Facebook</span>
+          </button>
+
+          <div id="loginErrorMsg" class="login-error-alert" style="display: none;"></div>
+
+          <div class="manual-token-section">
+            <button class="btn-token-toggle" id="btnToggleManualToken" type="button">
+              <span>Oppure usa un Access Token manuale</span>
+              <span id="tokenChevron">▼</span>
+            </button>
+            <div id="manualTokenBox" class="manual-token-box" style="display: none;">
+              <input id="inputManualToken" type="password" placeholder="Incolla Access Token EAAV..." autocomplete="off">
+              <button id="btnSubmitManualToken" class="btn btn-secondary btn-sm" type="button">Connetti</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="login-card-foot">
+          <span>Protetto tramite Meta Marketing API v22.0</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Top Compact Header -->
-    <header class="top-nav">
+    <header class="top-nav" id="topNav">
       <div class="top-nav-inner">
         <div class="brand">
           <span class="brand-logo">📊</span>
@@ -74,6 +113,13 @@
             </svg>
             <span>Aggiorna</span>
           </button>
+
+          <!-- User Profile & Logout -->
+          <div class="user-profile-badge" id="userProfileBadge" style="display: none;">
+            <img id="userProfileAvatar" class="user-avatar" src="" alt="Avatar" style="display: none;">
+            <span id="userProfileName" class="user-name">Utente</span>
+            <button id="btnLogout" class="btn-logout" type="button" title="Disconnetti account Meta">Esci</button>
+          </div>
         </div>
       </div>
     </header>

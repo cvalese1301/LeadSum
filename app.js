@@ -8,10 +8,18 @@ const STORAGE_KEYS = {
   DATE_PRESET: "leadsum_date_preset_v2",
   CUSTOM_SINCE: "leadsum_custom_since_v2",
   CUSTOM_UNTIL: "leadsum_custom_until_v2",
-  ONLY_ACTIVE: "leadsum_only_active_v2"
+  ONLY_ACTIVE: "leadsum_only_active_v2",
+  USER_TOKEN: "leadsum_user_token_v2"
 };
 
 const state = {
+  user: {
+    authenticated: false,
+    id: null,
+    name: null,
+    picture: null,
+    token: localStorage.getItem(STORAGE_KEYS.USER_TOKEN) || null
+  },
   allAdAccounts: [],
   visibleAccountIds: JSON.parse(localStorage.getItem(STORAGE_KEYS.VISIBLE_ACCOUNTS) || "null"),
   datePreset: localStorage.getItem(STORAGE_KEYS.DATE_PRESET) || "yesterday",
@@ -29,6 +37,20 @@ const state = {
 };
 
 const DOM = {
+  // Login & Auth
+  loginScreen: document.querySelector("#loginScreen"),
+  btnFacebookLogin: document.querySelector("#btnFacebookLogin"),
+  loginErrorMsg: document.querySelector("#loginErrorMsg"),
+  btnToggleManualToken: document.querySelector("#btnToggleManualToken"),
+  manualTokenBox: document.querySelector("#manualTokenBox"),
+  inputManualToken: document.querySelector("#inputManualToken"),
+  btnSubmitManualToken: document.querySelector("#btnSubmitManualToken"),
+  tokenChevron: document.querySelector("#tokenChevron"),
+  userProfileBadge: document.querySelector("#userProfileBadge"),
+  userProfileAvatar: document.querySelector("#userProfileAvatar"),
+  userProfileName: document.querySelector("#userProfileName"),
+  btnLogout: document.querySelector("#btnLogout"),
+
   // Navigation & Date
   dateButtons: document.querySelectorAll(".date-btn"),
   customDatesWrap: document.querySelector("#customDatesWrap"),
@@ -41,7 +63,6 @@ const DOM = {
   btnAccountsCountText: document.querySelector("#btnAccountsCountText"),
   btnOpenReportModal: document.querySelector("#btnOpenReportModal"),
   btnRefreshData: document.querySelector("#btnRefreshData"),
-
 
   // Totals Bar
   totalLeadsVal: document.querySelector("#totalLeadsVal"),
@@ -91,12 +112,149 @@ const formatNumber = (val = 0) => {
 };
 
 async function api(path, options = {}) {
-  const res = await fetch(path, options);
+  const headers = { ...(options.headers || {}) };
+  if (state.user.token) {
+    headers["Authorization"] = `Bearer ${state.user.token}`;
+  }
+  const res = await fetch(path, { ...options, headers });
   const data = await res.json();
   if (!res.ok || data.error) {
+    if (res.status === 401 && !path.startsWith("/api/auth/")) {
+      showLoginScreen();
+    }
     throw new Error(data.error || `Errore API (${res.status})`);
   }
   return data;
+}
+
+/* ==========================================================================
+   Facebook SDK & Authentication
+   ========================================================================== */
+
+function initFacebookSDK(appId) {
+  if (window.FB) return;
+  window.fbAsyncInit = function() {
+    FB.init({
+      appId: appId || "1487594375621582",
+      cookie: true,
+      xfbml: true,
+      version: "v22.0"
+    });
+  };
+
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "https://connect.facebook.net/it_IT/sdk.js";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, "script", "facebook-jssdk"));
+}
+
+function showLoginScreen() {
+  if (DOM.loginScreen) DOM.loginScreen.style.display = "flex";
+  if (DOM.userProfileBadge) DOM.userProfileBadge.style.display = "none";
+}
+
+function showDashboardUI() {
+  if (DOM.loginScreen) DOM.loginScreen.style.display = "none";
+  if (DOM.userProfileBadge) {
+    DOM.userProfileBadge.style.display = "inline-flex";
+    if (DOM.userProfileName) DOM.userProfileName.textContent = state.user.name || "Utente Meta";
+    if (DOM.userProfileAvatar) {
+      if (state.user.picture) {
+        DOM.userProfileAvatar.src = state.user.picture;
+        DOM.userProfileAvatar.style.display = "inline-block";
+      } else {
+        DOM.userProfileAvatar.style.display = "none";
+      }
+    }
+  }
+}
+
+function showLoginError(msg) {
+  if (DOM.loginErrorMsg) {
+    DOM.loginErrorMsg.textContent = msg;
+    DOM.loginErrorMsg.style.display = "block";
+  }
+}
+
+function hideLoginError() {
+  if (DOM.loginErrorMsg) DOM.loginErrorMsg.style.display = "none";
+}
+
+function loginWithFacebook() {
+  hideLoginError();
+  if (!window.FB) {
+    showLoginError("SDK Facebook in caricamento... Riprova tra qualche secondo.");
+    return;
+  }
+
+  FB.login(async (response) => {
+    if (response.authResponse && response.authResponse.accessToken) {
+      try {
+        const authRes = await api("/api/auth/facebook-login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ accessToken: response.authResponse.accessToken })
+        });
+
+        if (authRes.ok && authRes.accessToken) {
+          state.user = {
+            authenticated: true,
+            ...authRes.user,
+            token: authRes.accessToken
+          };
+          localStorage.setItem(STORAGE_KEYS.USER_TOKEN, authRes.accessToken);
+          showDashboardUI();
+          await loadInitialAccounts();
+        }
+      } catch (err) {
+        showLoginError(`Errore durante l'accesso: ${err.message}`);
+      }
+    } else {
+      showLoginError("Accesso Facebook annullato o permessi non concessi.");
+    }
+  }, { scope: "ads_read,read_insights,business_management" });
+}
+
+async function handleManualTokenSubmit() {
+  const rawToken = DOM.inputManualToken?.value.trim();
+  if (!rawToken) {
+    showLoginError("Inserisci un Access Token valido.");
+    return;
+  }
+  hideLoginError();
+
+  try {
+    const authRes = await api("/api/auth/facebook-login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accessToken: rawToken })
+    });
+
+    if (authRes.ok && authRes.accessToken) {
+      state.user = {
+        authenticated: true,
+        ...authRes.user,
+        token: authRes.accessToken
+      };
+      localStorage.setItem(STORAGE_KEYS.USER_TOKEN, authRes.accessToken);
+      showDashboardUI();
+      await loadInitialAccounts();
+    }
+  } catch (err) {
+    showLoginError(`Token non valido: ${err.message}`);
+  }
+}
+
+function logout() {
+  localStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
+  state.user = { authenticated: false, id: null, name: null, picture: null, token: null };
+  if (window.FB && typeof FB.logout === "function") {
+    try { FB.logout(); } catch(e) {}
+  }
+  showLoginScreen();
 }
 
 /* ==========================================================================
@@ -114,9 +272,24 @@ async function initApp() {
 
   syncDateButtonsUI();
 
-  // Load config & ad accounts list
-  await loadInitialAccounts();
+  // Check authentication with Meta
+  try {
+    const auth = await api("/api/auth/me");
+    if (auth.appId) initFacebookSDK(auth.appId);
+
+    if (auth.authenticated) {
+      state.user = { authenticated: true, ...auth.user, token: state.user.token };
+      showDashboardUI();
+      await loadInitialAccounts();
+    } else {
+      showLoginScreen();
+    }
+  } catch (error) {
+    console.warn("Auth initialization note:", error.message);
+    showLoginScreen();
+  }
 }
+
 
 async function loadInitialAccounts() {
   try {
@@ -779,6 +952,21 @@ function bindEvents() {
         if (DOM.reportCopyFeedback) DOM.reportCopyFeedback.textContent = "";
       }, 2500);
     }
+  });
+
+  // Meta Auth Bindings
+  DOM.btnFacebookLogin?.addEventListener("click", loginWithFacebook);
+  DOM.btnLogout?.addEventListener("click", logout);
+  DOM.btnToggleManualToken?.addEventListener("click", () => {
+    if (DOM.manualTokenBox) {
+      const isHidden = DOM.manualTokenBox.style.display === "none";
+      DOM.manualTokenBox.style.display = isHidden ? "flex" : "none";
+      if (DOM.tokenChevron) DOM.tokenChevron.textContent = isHidden ? "▲" : "▼";
+    }
+  });
+  DOM.btnSubmitManualToken?.addEventListener("click", handleManualTokenSubmit);
+  DOM.inputManualToken?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") handleManualTokenSubmit();
   });
 }
 
