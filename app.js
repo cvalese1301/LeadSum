@@ -183,49 +183,29 @@ function hideLoginError() {
   if (DOM.loginErrorMsg) DOM.loginErrorMsg.style.display = "none";
 }
 
-function loginWithFacebook() {
-  hideLoginError();
-  if (!window.FB) {
-    showLoginError("SDK Facebook in caricamento... Riprova tra qualche secondo.");
-    return;
-  }
-
-  FB.login(async (response) => {
-    if (response.authResponse && response.authResponse.accessToken) {
-      try {
-        const authRes = await api("/api/auth/facebook-login", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ accessToken: response.authResponse.accessToken })
-        });
-
-        if (authRes.ok && authRes.accessToken) {
-          state.user = {
-            authenticated: true,
-            ...authRes.user,
-            token: authRes.accessToken
-          };
-          localStorage.setItem(STORAGE_KEYS.USER_TOKEN, authRes.accessToken);
-          showDashboardUI();
-          await loadInitialAccounts();
-        }
-      } catch (err) {
-        showLoginError(`Errore durante l'accesso: ${err.message}`);
-      }
-    } else {
-      showLoginError("Accesso Facebook annullato o permessi non concessi.");
+async function checkUrlForOAuthToken() {
+  // Check hash: #access_token=...
+  if (window.location.hash && window.location.hash.includes("access_token=")) {
+    const params = new URLSearchParams(window.location.hash.substring(1));
+    const token = params.get("access_token");
+    if (token) {
+      window.history.replaceState(null, null, window.location.pathname + window.location.search);
+      return token;
     }
-  }, { scope: "ads_read,read_insights,business_management" });
+  }
+  // Check query params: ?access_token=...
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get("access_token");
+  if (token) {
+    urlParams.delete("access_token");
+    const newSearch = urlParams.toString() ? `?${urlParams.toString()}` : "";
+    window.history.replaceState(null, null, window.location.pathname + newSearch);
+    return token;
+  }
+  return null;
 }
 
-async function handleManualTokenSubmit() {
-  const rawToken = DOM.inputManualToken?.value.trim();
-  if (!rawToken) {
-    showLoginError("Inserisci un Access Token valido.");
-    return;
-  }
-  hideLoginError();
-
+async function handleTokenAuth(rawToken) {
   try {
     const authRes = await api("/api/auth/facebook-login", {
       method: "POST",
@@ -242,10 +222,48 @@ async function handleManualTokenSubmit() {
       localStorage.setItem(STORAGE_KEYS.USER_TOKEN, authRes.accessToken);
       showDashboardUI();
       await loadInitialAccounts();
+      return true;
     }
   } catch (err) {
-    showLoginError(`Token non valido: ${err.message}`);
+    showLoginError(`Errore durante l'accesso: ${err.message}`);
   }
+  return false;
+}
+
+function loginWithFacebook() {
+  hideLoginError();
+  const appId = state.appId || "1487594375621582";
+  const redirectUri = window.location.origin + window.location.pathname;
+  const oauthUrl = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=ads_read,read_insights,business_management`;
+
+  if (window.FB && typeof FB.login === "function") {
+    try {
+      FB.login(async (response) => {
+        if (response.authResponse && response.authResponse.accessToken) {
+          await handleTokenAuth(response.authResponse.accessToken);
+        } else {
+          // If popup is blocked or fails, use direct OAuth redirect
+          window.location.href = oauthUrl;
+        }
+      }, { scope: "ads_read,read_insights,business_management" });
+      return;
+    } catch (err) {
+      console.warn("FB.login fallback to redirect:", err);
+    }
+  }
+
+  // Direct OAuth Redirect
+  window.location.href = oauthUrl;
+}
+
+async function handleManualTokenSubmit() {
+  const rawToken = DOM.inputManualToken?.value.trim();
+  if (!rawToken) {
+    showLoginError("Inserisci un Access Token valido.");
+    return;
+  }
+  hideLoginError();
+  await handleTokenAuth(rawToken);
 }
 
 function logout() {
@@ -272,10 +290,20 @@ async function initApp() {
 
   syncDateButtonsUI();
 
-  // Check authentication with Meta
+  // 1. Check if token returned in OAuth URL callback
+  const urlOAuthToken = await checkUrlForOAuthToken();
+  if (urlOAuthToken) {
+    const ok = await handleTokenAuth(urlOAuthToken);
+    if (ok) return;
+  }
+
+  // 2. Check authentication with Meta API
   try {
     const auth = await api("/api/auth/me");
-    if (auth.appId) initFacebookSDK(auth.appId);
+    if (auth.appId) {
+      state.appId = auth.appId;
+      initFacebookSDK(auth.appId);
+    }
 
     if (auth.authenticated) {
       state.user = { authenticated: true, ...auth.user, token: state.user.token };
@@ -289,6 +317,7 @@ async function initApp() {
     showLoginScreen();
   }
 }
+
 
 
 async function loadInitialAccounts() {
