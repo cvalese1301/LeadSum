@@ -235,7 +235,7 @@ function loginWithFacebook() {
   hideLoginError();
   const appId = state.appId || "1487594375621582";
   const redirectUri = window.location.origin + window.location.pathname;
-  const oauthUrl = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=ads_read,read_insights,business_management`;
+  const oauthUrl = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=ads_read,ads_management,business_management,public_profile`;
 
   if (window.FB && typeof FB.login === "function") {
     try {
@@ -246,7 +246,7 @@ function loginWithFacebook() {
           // If popup is blocked or fails, use direct OAuth redirect
           window.location.href = oauthUrl;
         }
-      }, { scope: "ads_read,read_insights,business_management" });
+      }, { scope: "ads_read,ads_management,business_management,public_profile" });
       return;
     } catch (err) {
       console.warn("FB.login fallback to redirect:", err);
