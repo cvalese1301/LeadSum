@@ -3,9 +3,14 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = __dirname;
-const PORT = Number(process.env.PORT || 4173);
 const env = loadEnv(path.join(ROOT, ".env"));
-const API_VERSION = env.META_API_VERSION || "v21.0";
+
+function getEnv(key, defaultVal = "") {
+  return process.env[key] || env[key] || defaultVal;
+}
+
+const PORT = Number(getEnv("PORT", 4173));
+const API_VERSION = getEnv("META_API_VERSION", "v22.0");
 const GRAPH_BASE = `https://graph.facebook.com/${API_VERSION}`;
 
 const mimeTypes = {
@@ -51,8 +56,9 @@ function json(res, statusCode, payload) {
 }
 
 function token() {
-  return env.META_ACCESS_TOKEN;
+  return getEnv("META_ACCESS_TOKEN");
 }
+
 
 async function graph(pathname, params = {}, accessToken = token()) {
   if (!accessToken) {
@@ -1564,7 +1570,7 @@ async function handleApi(req, res, url) {
       }
       return json(res, 200, {
         apiVersion: API_VERSION,
-        loginConfigId: env.META_LOGIN_CONFIG_ID || null,
+        loginConfigId: getEnv("META_LOGIN_CONFIG_ID", null),
         hasToken: Boolean(token()),
         ...configuredSources(),
         adAccounts,

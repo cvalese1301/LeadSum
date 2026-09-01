@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: leadsum
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: META_API_VERSION
+        value: v22.0
+      - key: META_ACCESS_TOKEN
+        sync: false
