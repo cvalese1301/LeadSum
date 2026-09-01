@@ -877,9 +877,9 @@ function openReportModal() {
   const now = new Date().toLocaleDateString("it-IT");
 
   const clientsLines = clients
-    .filter(c => c.spend > 0 || c.totalLeads > 0)
-    .sort((a, b) => b.totalLeads - a.totalLeads)
-    .map(c => `• *${c.name}*: ${c.totalLeads} lead | ${formatCurrency(c.spend)} | CPL: ${c.totalLeads > 0 ? formatCurrency(c.cpl) : "0 lead"}${c.alertAdsCount > 0 ? ` (⚠️ ${c.alertAdsCount} > soglia)` : ""}`)
+    .filter(c => c.spend > 0 || c.totalLeads > 0 || (c.dailyBudget || 0) > 0)
+    .sort((a, b) => b.totalLeads - a.totalLeads || b.spend - a.spend)
+    .map(c => `• *${c.name}*: ${c.totalLeads} lead | Spesa: ${formatCurrency(c.spend)} | CPL: ${c.totalLeads > 0 ? formatCurrency(c.cpl) : "-"} | Budget: ${formatCurrency(c.dailyBudget)}/gg${c.alertAdsCount > 0 ? ` (⚠️ ${c.alertAdsCount} > soglia)` : ""}`)
     .join("\n");
 
   const reportText = `📊 *RIASSUNTO CLIENTI META ADS - ${dateLabel}*
