@@ -1173,9 +1173,209 @@ async function applyRuleToCreatedAds(accountId, ruleId, adIds) {
 
 async function handleApi(req, res, url) {
   try {
+    // 0. Client Overview (Dashboard multi-account)
+    if (url.pathname === "/api/meta/insights/clients-overview") {
+      const accountIdsParam = url.searchParams.get("accountIds");
+      const datePreset = url.searchParams.get("datePreset") || "yesterday";
+      const since = url.searchParams.get("since");
+      const until = url.searchParams.get("until");
+      const threshold = parseFloat(url.searchParams.get("threshold") || "15.00");
+
+      let targetAccounts = [];
+      if (accountIdsParam) {
+        const ids = accountIdsParam.split(",").map(s => s.trim()).filter(Boolean);
+        const allAccs = await listAdAccounts().catch(() => []);
+        targetAccounts = allAccs.filter(a => ids.includes(a.id));
+      } else {
+        targetAccounts = await listAdAccounts().catch(() => []);
+      }
+
+      if (targetAccounts.length === 0 && !token()) {
+        const demo = getDemoInsightsData(datePreset);
+        return json(res, 200, {
+          isDemo: true,
+          datePreset,
+          clients: [
+            {
+              id: "act_demo_1",
+              name: "Dott Sante Vass",
+              activeCampaignsCount: 11,
+              totalLeads: 16,
+              spend: 434.30,
+              cpl: 27.14,
+              dailyBudget: 467.00,
+              alertAdsCount: 3,
+              currency: "EUR"
+            },
+            {
+              id: "act_demo_2",
+              name: "SVD",
+              activeCampaignsCount: 9,
+              totalLeads: 109,
+              spend: 1637.93,
+              cpl: 15.03,
+              dailyBudget: 1850.00,
+              alertAdsCount: 2,
+              currency: "EUR"
+            },
+            {
+              id: "act_demo_3",
+              name: "PAA",
+              activeCampaignsCount: 4,
+              totalLeads: 9,
+              spend: 24.20,
+              cpl: 2.69,
+              dailyBudget: 35.00,
+              alertAdsCount: 0,
+              currency: "EUR"
+            },
+            {
+              id: "act_demo_4",
+              name: "PAR",
+              activeCampaignsCount: 4,
+              totalLeads: 8,
+              spend: 34.25,
+              cpl: 4.28,
+              dailyBudget: 45.00,
+              alertAdsCount: 0,
+              currency: "EUR"
+            },
+            {
+              id: "act_demo_5",
+              name: "Bar Nol",
+              activeCampaignsCount: 1,
+              totalLeads: 1,
+              spend: 2.87,
+              cpl: 2.87,
+              dailyBudget: 10.00,
+              alertAdsCount: 0,
+              currency: "EUR"
+            },
+            {
+              id: "act_demo_6",
+              name: "Galullo",
+              activeCampaignsCount: 5,
+              totalLeads: 0,
+              spend: 101.58,
+              cpl: 0.00,
+              dailyBudget: 120.00,
+              alertAdsCount: 2,
+              currency: "EUR"
+            },
+            {
+              id: "act_demo_7",
+              name: "Asd Sp",
+              activeCampaignsCount: 2,
+              totalLeads: 4,
+              spend: 16.89,
+              cpl: 4.22,
+              dailyBudget: 20.00,
+              alertAdsCount: 0,
+              currency: "EUR"
+            },
+            {
+              id: "act_demo_8",
+              name: "Cesena Sub",
+              activeCampaignsCount: 2,
+              totalLeads: 1,
+              spend: 12.40,
+              cpl: 12.40,
+              dailyBudget: 15.00,
+              alertAdsCount: 0,
+              currency: "EUR"
+            }
+          ]
+        });
+      }
+
+      const timeParams = {};
+      if (datePreset === "custom" && since && until) {
+        timeParams.time_range = JSON.stringify({ since, until });
+      } else {
+        timeParams.date_preset = datePreset;
+      }
+
+      // Fetch all clients metrics in batches
+      const clientPromises = targetAccounts.map(async (acc) => {
+        try {
+          const [insightsRes, campaignsRes] = await Promise.all([
+            graph(`/${acc.id}/insights`, {
+              ...timeParams,
+              fields: "spend,actions",
+              limit: "5"
+            }).catch(() => ({ data: [] })),
+
+            graph(`/${acc.id}/campaigns`, {
+              fields: "id,name,status,effective_status,daily_budget",
+              limit: "100"
+            }).catch(() => ({ data: [] }))
+          ]);
+
+          const parsed = parseInsightsMetrics(insightsRes.data?.[0] || {});
+          const campaigns = campaignsRes.data || [];
+          const activeCampaigns = campaigns.filter(c => c.status === "ACTIVE" || c.effective_status === "ACTIVE");
+          
+          let totalDailyBudget = 0;
+          activeCampaigns.forEach(c => {
+            const rawDaily = parseFloat(c.daily_budget || 0) / 100;
+            if (rawDaily > 0) totalDailyBudget += rawDaily;
+          });
+
+          // If CPL > threshold, flag alert
+          const isHighCpl = parsed.totalLeads > 0 && parsed.cpl > threshold;
+          const isZeroLeadWaste = parsed.totalLeads === 0 && parsed.spend >= threshold;
+          const alertAdsCount = (isHighCpl || isZeroLeadWaste) ? 1 : 0;
+
+          return {
+            id: acc.id,
+            account_id: acc.account_id,
+            name: acc.name,
+            currency: acc.currency || "EUR",
+            activeCampaignsCount: activeCampaigns.length,
+            totalCampaignsCount: campaigns.length,
+            totalLeads: parsed.totalLeads,
+            formLeads: parsed.formLeads,
+            messagingLeads: parsed.messagingLeads,
+            pixelLeads: parsed.pixelLeads,
+            spend: parsed.spend,
+            cpl: parsed.cpl,
+            dailyBudget: Math.round(totalDailyBudget * 100) / 100,
+            impressions: parsed.impressions,
+            clicks: parsed.clicks,
+            ctr: parsed.ctr,
+            alertAdsCount
+          };
+        } catch (err) {
+          return {
+            id: acc.id,
+            account_id: acc.account_id,
+            name: acc.name,
+            currency: acc.currency || "EUR",
+            activeCampaignsCount: 0,
+            totalLeads: 0,
+            spend: 0,
+            cpl: 0,
+            dailyBudget: 0,
+            alertAdsCount: 0,
+            error: err.message
+          };
+        }
+      });
+
+      const clients = await Promise.all(clientPromises);
+
+      return json(res, 200, {
+        isDemo: false,
+        datePreset,
+        since: since || null,
+        until: until || null,
+        clients
+      });
+    }
+
     // 1. Insights Overview & Summary
     if (url.pathname === "/api/meta/insights/summary") {
-      const accountId = url.searchParams.get("accountId") || "demo";
+      const accountId = url.searchParams.get("accountId") || env.META_AD_ACCOUNT_ID || "act_demo_123456789";
       const datePreset = url.searchParams.get("datePreset") || "last_7d";
       const since = url.searchParams.get("since");
       const until = url.searchParams.get("until");
