@@ -412,7 +412,7 @@ function renderExpandedDetailRow(client) {
               <table class="sub-table" style="margin-top: 8px;">
                 <thead>
                   <tr>
-                    <th>Nome Inserzione</th>
+                    <th>Nome Inserzione (Apri in Ads Manager)</th>
                     <th>Campagna</th>
                     <th>Stato</th>
                     <th class="text-right">Spesa</th>
@@ -424,7 +424,16 @@ function renderExpandedDetailRow(client) {
                 <tbody>
                   ${criticalAds.map(ad => `
                     <tr>
-                      <td><strong>${ad.name}</strong></td>
+                      <td>
+                        <a href="${ad.adsManagerUrl || `https://www.facebook.com/adsmanager/manage/ads?selected_ad_ids=${ad.id}`}" target="_blank" rel="noopener noreferrer" class="ad-link-external" onclick="event.stopPropagation()" title="Apri inserzione direttamente in Meta Ads Manager">
+                          <strong class="ad-name-text">${ad.name}</strong>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="link-external-icon">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                          </svg>
+                        </a>
+                      </td>
                       <td style="color: var(--text-dim);">${ad.campaign_name || "-"}</td>
                       <td><span class="alert-badge ${ad.status === "ACTIVE" ? "badge-ok" : "badge-danger"}">${ad.status}</span></td>
                       <td class="text-right val-mono">${formatCurrency(ad.spend)}</td>
@@ -449,7 +458,7 @@ function renderExpandedDetailRow(client) {
           <!-- Campaigns Section -->
           <div>
             <div class="detail-section-title">
-              <span>🎯 Tutte le Campagne del Cliente</span>
+              <span>🎯 Tutte le Campagne del Cliente (Apri in Ads Manager)</span>
               <span style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal;">(${campaigns.length} totali)</span>
             </div>
             <table class="sub-table" style="margin-top: 8px;">
@@ -467,7 +476,16 @@ function renderExpandedDetailRow(client) {
               <tbody>
                 ${campaigns.map(c => `
                   <tr>
-                    <td><strong>${c.name}</strong></td>
+                    <td>
+                      <a href="${c.adsManagerUrl || `https://www.facebook.com/adsmanager/manage/campaigns?selected_campaign_ids=${c.id}`}" target="_blank" rel="noopener noreferrer" class="ad-link-external" onclick="event.stopPropagation()" title="Apri campagna in Meta Ads Manager">
+                        <strong class="ad-name-text">${c.name}</strong>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="link-external-icon">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                          <polyline points="15 3 21 3 21 9"></polyline>
+                          <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                      </a>
+                    </td>
                     <td><span class="alert-badge ${c.status === "ACTIVE" ? "badge-ok" : "badge-danger"}">${c.status}</span></td>
                     <td style="color: var(--color-blue);">${c.dailyBudgetVal > 0 ? `${formatCurrency(c.dailyBudgetVal)}/gg` : "A livello gruppo"}</td>
                     <td class="text-right val-mono">${formatCurrency(c.spend)}</td>
@@ -479,6 +497,7 @@ function renderExpandedDetailRow(client) {
               </tbody>
             </table>
           </div>
+
 
         </div>
       </td>

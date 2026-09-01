@@ -937,6 +937,8 @@ async function fetchLiveInsightsSummary(accountId, query = {}) {
     adInsightMap[row.ad_id] = parseInsightsMetrics(row);
   });
 
+  const numericActId = String(accountInfo.account_id || accountInfo.id || accountId).replace(/^act_/, "");
+
   const enrichedCampaigns = campaigns.map(c => {
     const metrics = campaignInsightMap[c.id] || parseInsightsMetrics({});
     const today = todayCampaignMap[c.id] || { spend: 0, leads: 0, cpl: 0 };
@@ -945,6 +947,7 @@ async function fetchLiveInsightsSummary(accountId, query = {}) {
     return {
       id: c.id,
       name: c.name,
+      adsManagerUrl: `https://www.facebook.com/adsmanager/manage/campaigns?act=${numericActId}&selected_campaign_ids=${c.id}`,
       status: c.status,
       effective_status: c.effective_status,
       objective: c.objective,
@@ -978,6 +981,7 @@ async function fetchLiveInsightsSummary(accountId, query = {}) {
       name: a.name,
       campaign_id: a.campaign_id,
       campaign_name: parentCamp?.name || a.campaign_id,
+      adsManagerUrl: `https://www.facebook.com/adsmanager/manage/adsets?act=${numericActId}&selected_adset_ids=${a.id}`,
       status: a.status,
       effective_status: a.effective_status,
       dailyBudgetVal: budgetInfo.dailyBudget,
@@ -1006,6 +1010,7 @@ async function fetchLiveInsightsSummary(accountId, query = {}) {
       campaign_name: parentCamp?.name || ad.campaign_id,
       adset_id: ad.adset_id,
       adset_name: parentAdset?.name || ad.adset_id,
+      adsManagerUrl: `https://www.facebook.com/adsmanager/manage/ads?act=${numericActId}&selected_ad_ids=${ad.id}`,
       status: ad.status,
       effective_status: ad.effective_status,
       spend: metrics.spend,
@@ -1019,6 +1024,7 @@ async function fetchLiveInsightsSummary(accountId, query = {}) {
       creative: ad.creative || null
     };
   });
+
 
   const daysCount = datePreset === "today" || datePreset === "yesterday" ? 1 : (datePreset === "last_30d" ? 30 : (datePreset === "last_14d" ? 14 : 7));
   const averageDailySpend = Math.round((accountMetric.spend / daysCount) * 100) / 100;

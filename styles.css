@@ -573,6 +573,33 @@ body {
   border-bottom: none;
 }
 
+.ad-link-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f8fafc;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.ad-link-external:hover {
+  color: var(--color-blue);
+}
+
+.ad-link-external:hover .ad-name-text {
+  text-decoration: underline;
+}
+
+.link-external-icon {
+  color: var(--text-dim);
+  transition: color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.ad-link-external:hover .link-external-icon {
+  color: var(--color-blue);
+}
+
 .td-loading {
   text-align: center;
   padding: 50px !important;
