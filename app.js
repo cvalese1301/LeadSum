@@ -18,7 +18,7 @@ const state = {
     id: null,
     name: null,
     picture: null,
-    token: localStorage.getItem(STORAGE_KEYS.USER_TOKEN) || null
+    token: sessionStorage.getItem(STORAGE_KEYS.USER_TOKEN) || null
   },
   allAdAccounts: [],
   visibleAccountIds: JSON.parse(localStorage.getItem(STORAGE_KEYS.VISIBLE_ACCOUNTS) || "null"),
@@ -219,7 +219,8 @@ async function handleTokenAuth(rawToken) {
         ...authRes.user,
         token: authRes.accessToken
       };
-      localStorage.setItem(STORAGE_KEYS.USER_TOKEN, authRes.accessToken);
+      sessionStorage.setItem(STORAGE_KEYS.USER_TOKEN, authRes.accessToken);
+      localStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
       showDashboardUI();
       await loadInitialAccounts();
       return true;
@@ -267,6 +268,7 @@ async function handleManualTokenSubmit() {
 }
 
 function logout() {
+  sessionStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
   localStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
   state.user = { authenticated: false, id: null, name: null, picture: null, token: null };
   if (window.FB && typeof FB.logout === "function") {
@@ -305,7 +307,7 @@ async function initApp() {
       initFacebookSDK(auth.appId);
     }
 
-    if (auth.authenticated) {
+    if (state.user.token && auth.authenticated) {
       state.user = { authenticated: true, ...auth.user, token: state.user.token };
       showDashboardUI();
       await loadInitialAccounts();

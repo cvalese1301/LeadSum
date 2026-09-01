@@ -67,7 +67,7 @@ function extractTokenFromReq(req) {
   if (req.headers["x-meta-token"]) {
     return String(req.headers["x-meta-token"]).trim();
   }
-  return token();
+  return null;
 }
 
 async function graph(pathname, params = {}, accessToken = token()) {
@@ -1277,101 +1277,10 @@ async function handleApi(req, res, url) {
         targetAccounts = await listAdAccounts(userToken).catch(() => []);
       }
 
-      if (targetAccounts.length === 0 && !userToken) {
-        const demo = getDemoInsightsData(datePreset);
-        return json(res, 200, {
-          isDemo: true,
-          datePreset,
-          clients: [
-            {
-              id: "act_demo_1",
-              name: "Dott Sante Vass",
-              activeCampaignsCount: 11,
-              totalLeads: 16,
-              spend: 434.30,
-              cpl: 27.14,
-              dailyBudget: 467.00,
-              alertAdsCount: 3,
-              currency: "EUR"
-            },
-            {
-              id: "act_demo_2",
-              name: "SVD",
-              activeCampaignsCount: 9,
-              totalLeads: 109,
-              spend: 1637.93,
-              cpl: 15.03,
-              dailyBudget: 1850.00,
-              alertAdsCount: 2,
-              currency: "EUR"
-            },
-            {
-              id: "act_demo_3",
-              name: "PAA",
-              activeCampaignsCount: 4,
-              totalLeads: 9,
-              spend: 24.20,
-              cpl: 2.69,
-              dailyBudget: 35.00,
-              alertAdsCount: 0,
-              currency: "EUR"
-            },
-            {
-              id: "act_demo_4",
-              name: "PAR",
-              activeCampaignsCount: 4,
-              totalLeads: 8,
-              spend: 34.25,
-              cpl: 4.28,
-              dailyBudget: 45.00,
-              alertAdsCount: 0,
-              currency: "EUR"
-            },
-            {
-              id: "act_demo_5",
-              name: "Bar Nol",
-              activeCampaignsCount: 1,
-              totalLeads: 1,
-              spend: 2.87,
-              cpl: 2.87,
-              dailyBudget: 10.00,
-              alertAdsCount: 0,
-              currency: "EUR"
-            },
-            {
-              id: "act_demo_6",
-              name: "Galullo",
-              activeCampaignsCount: 5,
-              totalLeads: 0,
-              spend: 101.58,
-              cpl: 0.00,
-              dailyBudget: 120.00,
-              alertAdsCount: 2,
-              currency: "EUR"
-            },
-            {
-              id: "act_demo_7",
-              name: "Asd Sp",
-              activeCampaignsCount: 2,
-              totalLeads: 4,
-              spend: 16.89,
-              cpl: 4.22,
-              dailyBudget: 20.00,
-              alertAdsCount: 0,
-              currency: "EUR"
-            },
-            {
-              id: "act_demo_8",
-              name: "Cesena Sub",
-              activeCampaignsCount: 2,
-              totalLeads: 1,
-              spend: 12.40,
-              cpl: 12.40,
-              dailyBudget: 15.00,
-              alertAdsCount: 0,
-              currency: "EUR"
-            }
-          ]
+      if (!userToken) {
+        return json(res, 401, {
+          error: "Sessione non autenticata. Effettua prima l'accesso con Facebook.",
+          requiresAuth: true
         });
       }
 
