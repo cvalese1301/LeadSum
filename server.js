@@ -1358,6 +1358,7 @@ async function handleApi(req, res, url) {
             name: acc.name,
             currency: acc.currency || "EUR",
             activeCampaignsCount: activeCampaigns.length,
+            totalCampaignsCount: campaignsRes.data?.length || activeCampaigns.length,
             totalLeads: parsed.totalLeads,
             formLeads: parsed.formLeads,
             messagingLeads: parsed.messagingLeads,
@@ -1372,6 +1373,7 @@ async function handleApi(req, res, url) {
             ctr: parsed.ctr,
             alertAdsCount
           };
+
         } catch (err) {
           return {
             id: acc.id,

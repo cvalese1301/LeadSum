@@ -7,7 +7,8 @@ const STORAGE_KEYS = {
   COST_THRESHOLD: "leadsum_cost_threshold_v2",
   DATE_PRESET: "leadsum_date_preset_v2",
   CUSTOM_SINCE: "leadsum_custom_since_v2",
-  CUSTOM_UNTIL: "leadsum_custom_until_v2"
+  CUSTOM_UNTIL: "leadsum_custom_until_v2",
+  ONLY_ACTIVE: "leadsum_only_active_v2"
 };
 
 const state = {
@@ -17,6 +18,7 @@ const state = {
   customSince: localStorage.getItem(STORAGE_KEYS.CUSTOM_SINCE) || "",
   customUntil: localStorage.getItem(STORAGE_KEYS.CUSTOM_UNTIL) || "",
   costThreshold: parseFloat(localStorage.getItem(STORAGE_KEYS.COST_THRESHOLD) || "15.00"),
+  onlyActiveCampaigns: localStorage.getItem(STORAGE_KEYS.ONLY_ACTIVE) !== "false",
   clientsData: [],
   searchFilter: "",
   sortColumn: "spend",
@@ -34,10 +36,12 @@ const DOM = {
   inputDateUntil: document.querySelector("#inputDateUntil"),
   btnApplyCustomDate: document.querySelector("#btnApplyCustomDate"),
   globalThresholdInput: document.querySelector("#globalThresholdInput"),
+  chkOnlyActiveCampaigns: document.querySelector("#chkOnlyActiveCampaigns"),
   btnOpenAccountsModal: document.querySelector("#btnOpenAccountsModal"),
   btnAccountsCountText: document.querySelector("#btnAccountsCountText"),
   btnOpenReportModal: document.querySelector("#btnOpenReportModal"),
   btnRefreshData: document.querySelector("#btnRefreshData"),
+
 
   // Totals Bar
   totalLeadsVal: document.querySelector("#totalLeadsVal"),
@@ -104,6 +108,7 @@ async function initApp() {
 
   // Restore inputs
   if (DOM.globalThresholdInput) DOM.globalThresholdInput.value = state.costThreshold;
+  if (DOM.chkOnlyActiveCampaigns) DOM.chkOnlyActiveCampaigns.checked = state.onlyActiveCampaigns;
   if (DOM.inputDateSince && state.customSince) DOM.inputDateSince.value = state.customSince;
   if (DOM.inputDateUntil && state.customUntil) DOM.inputDateUntil.value = state.customUntil;
 
@@ -339,12 +344,16 @@ function renderClientsTable() {
       ? "cpl-tag tag-zero"
       : (client.cpl > state.costThreshold ? "cpl-tag tag-danger" : "cpl-tag tag-ok");
 
+    const campaignSubText = state.onlyActiveCampaigns
+      ? `${client.activeCampaignsCount} campagne attive`
+      : `${client.totalCampaignsCount || client.activeCampaignsCount} campagne totali`;
+
     return `
       <tr class="client-row ${hasAlerts || isOverThreshold ? "row-danger" : ""} ${isExpanded ? "row-expanded" : ""}" onclick="toggleClientExpand('${client.id}')">
         <td>
           <div class="cell-client">
             <span class="client-name">${client.name}</span>
-            <span class="client-sub">${client.activeCampaignsCount} campagne attive</span>
+            <span class="client-sub">${campaignSubText}</span>
           </div>
         </td>
         <td class="text-right">
@@ -395,7 +404,17 @@ function renderExpandedDetailRow(client) {
   }
 
   const { campaigns = [], ads = [] } = detail;
-  const criticalAds = ads.filter(ad => (ad.totalLeads > 0 && ad.cpl > state.costThreshold) || (ad.totalLeads === 0 && ad.spend >= state.costThreshold));
+  
+  // Apply only active filter if checked
+  const filteredCampaigns = state.onlyActiveCampaigns
+    ? campaigns.filter(c => c.status === "ACTIVE" || c.effective_status === "ACTIVE")
+    : campaigns;
+
+  const filteredAds = state.onlyActiveCampaigns
+    ? ads.filter(a => a.status === "ACTIVE" || a.effective_status === "ACTIVE")
+    : ads;
+
+  const criticalAds = filteredAds.filter(ad => (ad.totalLeads > 0 && ad.cpl > state.costThreshold) || (ad.totalLeads === 0 && ad.spend >= state.costThreshold));
 
   return `
     <tr class="detail-row">
@@ -451,15 +470,15 @@ function renderExpandedDetailRow(client) {
             </div>
           ` : `
             <div style="padding: 10px; background: rgba(16,185,129,0.06); border-radius: 6px; border: 1px solid rgba(16,185,129,0.2); font-size: 0.82rem; color: var(--color-emerald);">
-              ✨ Ottimo! Nessuna inserzione di questo cliente supera la soglia di € ${state.costThreshold.toFixed(2)}.
+              ✨ Ottimo! Nessuna inserzione ${state.onlyActiveCampaigns ? "attiva" : ""} di questo cliente supera la soglia di € ${state.costThreshold.toFixed(2)}.
             </div>
           `}
 
           <!-- Campaigns Section -->
           <div>
             <div class="detail-section-title">
-              <span>🎯 Tutte le Campagne del Cliente (Apri in Ads Manager)</span>
-              <span style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal;">(${campaigns.length} totali)</span>
+              <span>${state.onlyActiveCampaigns ? "🎯 Campagne Attive del Cliente" : "🎯 Tutte le Campagne del Cliente"} (Apri in Ads Manager)</span>
+              <span style="font-size: 0.72rem; color: var(--text-dim); font-weight: normal;">(${filteredCampaigns.length} ${state.onlyActiveCampaigns ? "attive" : "totali"})</span>
             </div>
             <table class="sub-table" style="margin-top: 8px;">
               <thead>
@@ -474,7 +493,7 @@ function renderExpandedDetailRow(client) {
                 </tr>
               </thead>
               <tbody>
-                ${campaigns.map(c => `
+                ${filteredCampaigns.length > 0 ? filteredCampaigns.map(c => `
                   <tr>
                     <td>
                       <a href="${c.adsManagerUrl || `https://www.facebook.com/adsmanager/manage/campaigns?selected_campaign_ids=${c.id}`}" target="_blank" rel="noopener noreferrer" class="ad-link-external" onclick="event.stopPropagation()" title="Apri campagna in Meta Ads Manager">
@@ -493,11 +512,16 @@ function renderExpandedDetailRow(client) {
                     <td class="text-right val-mono">${c.totalLeads > 0 ? formatCurrency(c.cpl) : "-"}</td>
                     <td class="text-right val-mono">${(c.ctr || 0).toFixed(2)}%</td>
                   </tr>
-                `).join("")}
+                `).join("") : `
+                  <tr>
+                    <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 18px;">
+                      Nessuna campagna attiva al momento per questo account.
+                    </td>
+                  </tr>
+                `}
               </tbody>
             </table>
           </div>
-
 
         </div>
       </td>
@@ -692,6 +716,13 @@ function bindEvents() {
       renderTotalsBar(state.clientsData);
       renderClientsTable();
     }
+  });
+
+  // Only Active Campaigns Checkbox (instant reactive update)
+  DOM.chkOnlyActiveCampaigns?.addEventListener("change", (e) => {
+    state.onlyActiveCampaigns = e.target.checked;
+    localStorage.setItem(STORAGE_KEYS.ONLY_ACTIVE, String(state.onlyActiveCampaigns));
+    renderClientsTable();
   });
 
   // Client Search Filter

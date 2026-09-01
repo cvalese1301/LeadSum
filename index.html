@@ -110,12 +110,18 @@
             <h2 class="table-title">Panoramica Clienti & Campagne</h2>
             <span class="table-subtitle" id="tableDateRangeSubtitle">Dati di: Ieri</span>
           </div>
-          <div class="search-input-wrap">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <input id="clientSearchInput" type="search" placeholder="Cerca cliente..." autocomplete="off">
+          <div class="table-tools-right">
+            <label class="toggle-checkbox-wrap" title="Filtra per mostrare esclusivamente le campagne attualmente attive">
+              <input id="chkOnlyActiveCampaigns" type="checkbox" checked>
+              <span class="toggle-checkbox-label">Vedi solo campagne attive</span>
+            </label>
+            <div class="search-input-wrap">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input id="clientSearchInput" type="search" placeholder="Cerca cliente..." autocomplete="off">
+            </div>
           </div>
         </div>
 

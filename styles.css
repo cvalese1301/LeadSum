@@ -349,6 +349,45 @@ body {
   color: var(--text-dim);
 }
 
+.table-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toggle-checkbox-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.toggle-checkbox-wrap:hover {
+  background: var(--bg-surface-raised);
+  color: var(--text-main);
+  border-color: var(--border-active);
+}
+
+.toggle-checkbox-wrap input[type="checkbox"] {
+  accent-color: var(--color-indigo);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.toggle-checkbox-label {
+  font-weight: 500;
+}
+
 .search-input-wrap {
   display: flex;
   align-items: center;
