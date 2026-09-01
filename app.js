@@ -40,6 +40,7 @@ const DOM = {
   // Login & Auth
   loginScreen: document.querySelector("#loginScreen"),
   btnFacebookLogin: document.querySelector("#btnFacebookLogin"),
+  btnQuickLogin: document.querySelector("#btnQuickLogin"),
   loginErrorMsg: document.querySelector("#loginErrorMsg"),
   btnToggleManualToken: document.querySelector("#btnToggleManualToken"),
   manualTokenBox: document.querySelector("#manualTokenBox"),
@@ -255,6 +256,30 @@ function loginWithFacebook() {
 
   // Direct OAuth Redirect
   window.location.href = oauthUrl;
+}
+
+async function handleQuickLogin() {
+  hideLoginError();
+  try {
+    const authRes = await api("/api/auth/quick-login", {
+      method: "POST",
+      headers: { "content-type": "application/json" }
+    });
+
+    if (authRes.ok && authRes.accessToken) {
+      state.user = {
+        authenticated: true,
+        ...authRes.user,
+        token: authRes.accessToken
+      };
+      sessionStorage.setItem(STORAGE_KEYS.USER_TOKEN, authRes.accessToken);
+      localStorage.removeItem(STORAGE_KEYS.USER_TOKEN);
+      showDashboardUI();
+      await loadInitialAccounts();
+    }
+  } catch (err) {
+    showLoginError(`Errore accesso rapido: ${err.message}`);
+  }
 }
 
 async function handleManualTokenSubmit() {
@@ -987,6 +1012,7 @@ function bindEvents() {
 
   // Meta Auth Bindings
   DOM.btnFacebookLogin?.addEventListener("click", loginWithFacebook);
+  DOM.btnQuickLogin?.addEventListener("click", handleQuickLogin);
   DOM.btnLogout?.addEventListener("click", logout);
   DOM.btnToggleManualToken?.addEventListener("click", () => {
     if (DOM.manualTokenBox) {

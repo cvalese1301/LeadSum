@@ -1260,6 +1260,34 @@ async function handleApi(req, res, url) {
       }
     }
 
+    // Auth 3: Quick Login with server key (temporary bypass)
+    if (url.pathname === "/api/auth/quick-login" && req.method === "POST") {
+      const serverToken = token();
+      if (!serverToken) {
+        return json(res, 400, { error: "Nessun token configurato sul server (.env o Render)." });
+      }
+
+      let userObj = { id: "admin_user", name: "Amministratore LeadSum", picture: null };
+      try {
+        const userRes = await graph("/me", { fields: "id,name,picture{url}" }, serverToken);
+        if (userRes && userRes.name) {
+          userObj = {
+            id: userRes.id,
+            name: userRes.name,
+            picture: userRes.picture?.data?.url || null
+          };
+        }
+      } catch (e) {
+        console.warn("Could not fetch user profile from server token:", e.message);
+      }
+
+      return json(res, 200, {
+        ok: true,
+        accessToken: serverToken,
+        user: userObj
+      });
+    }
+
     // 0. Client Overview (Dashboard multi-account)
     if (url.pathname === "/api/meta/insights/clients-overview") {
       const accountIdsParam = url.searchParams.get("accountIds");
