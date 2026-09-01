@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LeadSum - Meta Ads Lead & Campaign Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <!-- Top Navigation Header -->
+    <header class="navbar">
+      <div class="navbar-container">
+        <div class="brand-group">
+          <div class="brand-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <polyline points="16 11 18 13 22 9"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div class="brand-title-wrap">
+              <span class="brand-title">LeadSum</span>
+              <span class="brand-badge">Meta Intelligence</span>
+            </div>
+            <p class="brand-subtitle">Monitoraggio Contatti, Costo/Lead, Spesa Giornaliera, Budget & Alert Soglia</p>
+          </div>
+        </div>
+
+        <!-- Right Quick Actions -->
+        <div class="header-tools">
+          <div class="status-indicator" id="navStatusIndicator">
+            <span class="status-dot"></span>
+            <span id="navAccountName">Caricamento...</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="globalReportBtn" type="button" title="Genera report formattato per WhatsApp / Slack">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <span>Report Veloce</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" id="exportCsvBtn" type="button" title="Esporta dati in formato CSV">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>CSV</span>
+          </button>
+          <button class="btn btn-primary btn-sm" id="globalRefreshBtn" type="button" title="Ricarica i dati da Meta Graph API">
+            <svg class="refresh-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>Aggiorna Dati</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-layout">
+      <!-- DASHBOARD ANALYTICS VIEW -->
+      <div class="view-panel active" id="analyticsView">
+        
+        <!-- Live Alert Banner (if Demo or missing token) -->
+        <div class="demo-banner" id="demoBanner" style="display: none;">
+          <div class="demo-banner-content">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span id="demoBannerText">Stai visualizzando i dati in <strong>Modalità Demo Realistica</strong>. Inserisci il token nel file <code>.env</code> per collegare il tuo account Meta reale.</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="dismissDemoBannerBtn" type="button">✕</button>
+        </div>
+
+        <!-- Global Filter & Controls Bar -->
+        <section class="control-panel">
+          <div class="control-row">
+            <!-- Ad Account Selector -->
+            <div class="control-group account-group">
+              <label for="leadAccountSelect">Account Pubblicitario Meta</label>
+              <div class="select-wrapper">
+                <select id="leadAccountSelect">
+                  <option value="">Caricamento account...</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Date Preset Pills -->
+            <div class="control-group date-preset-group">
+              <label>Periodo di Analisi Metriche</label>
+              <div class="date-pills" role="radiogroup" aria-label="Periodo temporale">
+                <button class="date-pill" data-preset="today" type="button">Oggi</button>
+                <button class="date-pill" data-preset="yesterday" type="button">Ieri</button>
+                <button class="date-pill active" data-preset="last_7d" type="button">Ultimi 7 gg</button>
+                <button class="date-pill" data-preset="last_14d" type="button">Ultimi 14 gg</button>
+                <button class="date-pill" data-preset="last_30d" type="button">Ultimi 30 gg</button>
+                <button class="date-pill" data-preset="this_month" type="button">Questo Mese</button>
+                <button class="date-pill" data-preset="last_month" type="button">Mese Scorso</button>
+                <button class="date-pill" data-preset="custom" type="button">Personalizzato</button>
+              </div>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="control-group status-filter-group">
+              <label for="leadStatusFilter">Filtro Stato Campagne</label>
+              <div class="select-wrapper">
+                <select id="leadStatusFilter">
+                  <option value="ALL">Tutte (Attive e Pausa)</option>
+                  <option value="ACTIVE" selected>Solo Attive</option>
+                  <option value="PAUSED">Solo in Pausa</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Custom Date Range Sub-Bar (Hidden unless Custom is picked) -->
+          <div class="custom-date-bar" id="customDateBar" style="display: none;">
+            <div class="input-with-label">
+              <span>Dal:</span>
+              <input id="customDateSince" type="date">
+            </div>
+            <div class="input-with-label">
+              <span>Al:</span>
+              <input id="customDateUntil" type="date">
+            </div>
+            <button class="btn btn-secondary btn-sm" id="applyCustomDateBtn" type="button">Applica Date</button>
+          </div>
+
+          <!-- COST THRESHOLD CONFIGURATOR BAR (Soglia XX€) -->
+          <div class="threshold-bar">
+            <div class="threshold-intro">
+              <div class="threshold-badge-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </div>
+              <div>
+                <strong>Configuratore Soglia Costo Inserzioni (XX €)</strong>
+                <p>Identifica all'istante le inserzioni con costo per contatto o spesa superiore al tuo limite massimo personalizzato.</p>
+              </div>
+            </div>
+
+            <div class="threshold-inputs">
+              <div class="threshold-input-box">
+                <label for="costThresholdInput">Soglia Max per Contatto:</label>
+                <div class="currency-input">
+                  <span class="currency-prefix">€</span>
+                  <input id="costThresholdInput" type="number" min="0.5" max="1000" step="0.5" value="15.00">
+                </div>
+              </div>
+
+              <div class="threshold-mode-box">
+                <label for="thresholdModeSelect">Tipo di Alert:</label>
+                <div class="select-wrapper">
+                  <select id="thresholdModeSelect">
+                    <option value="both" selected>CPL > XX€ oppure Spesa > XX€ senza Lead</option>
+                    <option value="cpl_only">Solo Costo per Contatto (CPL > XX€)</option>
+                    <option value="zero_leads_only">Solo Spesa Sprecata (Spesa > XX€ con 0 Lead)</option>
+                  </select>
+                </div>
+              </div>
+
+              <button class="alert-counter-chip" id="jumpToAlertsBtn" type="button" title="Clicca per visualizzare le inserzioni sopra soglia">
+                <span class="alert-pulse"></span>
+                <span id="thresholdAlertsCountText">⚠️ 0 Inserzioni Sopra Soglia</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- TOP 5 KPI SCORECARDS GRID -->
+        <section class="kpi-grid">
+          <!-- KPI 1: Total Leads -->
+          <article class="kpi-card kpi-leads">
+            <div class="kpi-header">
+              <div class="kpi-icon-wrap icon-emerald">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+              </div>
+              <span class="kpi-tag tag-emerald">Contatti Arrivati</span>
+            </div>
+            <div class="kpi-body">
+              <h3 class="kpi-value" id="kpiTotalLeads">0</h3>
+              <p class="kpi-label">Totale Contatti Ricevuti</p>
+            </div>
+            <div class="kpi-footer-pills">
+              <span class="pill pill-muted" id="kpiFormLeads" title="Moduli nativi Facebook e Instagram">📑 0 Form</span>
+              <span class="pill pill-muted" id="kpiMsgLeads" title="Conversazioni WhatsApp e Direct">💬 0 Chat</span>
+              <span class="pill pill-muted" id="kpiPixelLeads" title="Conversioni Pixel sul Sito Web">🌐 0 Web</span>
+            </div>
+          </article>
+
+          <!-- KPI 2: Average Cost Per Contact (CPL) -->
+          <article class="kpi-card kpi-cpl">
+            <div class="kpi-header">
+              <div class="kpi-icon-wrap icon-indigo">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="1" x2="12" y2="23"></line>
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+              </div>
+              <span class="kpi-tag tag-indigo">Costo Medio / Lead</span>
+            </div>
+            <div class="kpi-body">
+              <h3 class="kpi-value" id="kpiAverageCpl">€ 0,00</h3>
+              <p class="kpi-label">Costo Medio per Singolo Contatto</p>
+            </div>
+            <div class="kpi-footer">
+              <div class="cpl-status-indicator" id="kpiCplStatus">
+                <span class="dot-ok"></span>
+                <span>Confronto soglia: calcolo...</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- KPI 3: Daily Spend (Today & Average) -->
+          <article class="kpi-card kpi-spend">
+            <div class="kpi-header">
+              <div class="kpi-icon-wrap icon-blue">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </div>
+              <span class="kpi-tag tag-blue">Spesa Giornaliera</span>
+            </div>
+            <div class="kpi-body">
+              <h3 class="kpi-value" id="kpiTodaySpend">€ 0,00</h3>
+              <p class="kpi-label">Spesa di Oggi (in tempo reale)</p>
+            </div>
+            <div class="kpi-footer spend-breakdown">
+              <div><span>Ieri:</span> <strong id="kpiYesterdaySpend">€ 0,00</strong></div>
+              <div><span>Media gg:</span> <strong id="kpiDailyAvgSpend">€ 0,00</strong></div>
+              <div><span>Tot Periodo:</span> <strong id="kpiTotalSpend">€ 0,00</strong></div>
+            </div>
+          </article>
+
+          <!-- KPI 4: Daily Budget & Pacing -->
+          <article class="kpi-card kpi-budget">
+            <div class="kpi-header">
+              <div class="kpi-icon-wrap icon-amber">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+                  <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+                </svg>
+              </div>
+              <span class="kpi-tag tag-amber">Budget & Pacing</span>
+            </div>
+            <div class="kpi-body">
+              <h3 class="kpi-value" id="kpiDailyBudget">€ 0,00</h3>
+              <p class="kpi-label">Budget Giornaliero Attivo Totale</p>
+            </div>
+            <div class="kpi-footer pacing-wrap">
+              <div class="pacing-header">
+                <span>Pacing Oggi: <strong id="kpiPacingPercent">0%</strong></span>
+                <span id="kpiProjectedText">Proiezione: € 0,00</span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-bar" id="kpiPacingBar" style="width: 0%;"></div>
+              </div>
+            </div>
+          </article>
+
+          <!-- KPI 5: Cost Alerts (> XX€) -->
+          <article class="kpi-card kpi-alerts">
+            <div class="kpi-header">
+              <div class="kpi-icon-wrap icon-rose">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </div>
+              <span class="kpi-tag tag-rose">Alert Costo > XX€</span>
+            </div>
+            <div class="kpi-body">
+              <h3 class="kpi-value" id="kpiAlertAdsCount">0</h3>
+              <p class="kpi-label">Inserzioni Critiche Sopra Soglia</p>
+            </div>
+            <div class="kpi-footer alert-summary-footer">
+              <span id="kpiAlertWastedSpend">Spesa critica: € 0,00</span>
+              <button class="btn-text-danger" id="viewAlertAdsLink" type="button">Ispeziona & Ottimizza →</button>
+            </div>
+          </article>
+        </section>
+
+        <!-- TREND CHART & PERFORMANCE HIGHLIGHTS -->
+        <section class="chart-section">
+          <div class="section-card">
+            <div class="section-card-header">
+              <div>
+                <h2 class="section-title">Andamento Giornaliero Spesa & Contatti</h2>
+                <p class="section-desc">Evoluzione della spesa quotidiana (barre) e dei contatti acquisiti (linea e valori) nel periodo selezionato.</p>
+              </div>
+              <div class="chart-legend">
+                <span class="legend-item"><span class="legend-box legend-spend"></span> Spesa Giornaliera (€)</span>
+                <span class="legend-item"><span class="legend-dot legend-leads"></span> Contatti Ricevuti</span>
+              </div>
+            </div>
+
+            <!-- Interactive Visual SVG / HTML Chart Container -->
+            <div class="chart-container" id="dailyTrendChartContainer">
+              <div class="chart-loading">Caricamento grafico...</div>
+            </div>
+
+            <!-- Secondary Metrics Bar -->
+            <div class="metrics-strip">
+              <div class="metric-item">
+                <span class="metric-name">Impression Totali</span>
+                <strong class="metric-val" id="secMetricImpressions">-</strong>
+              </div>
+              <div class="metric-item">
+                <span class="metric-name">Click sul Link</span>
+                <strong class="metric-val" id="secMetricClicks">-</strong>
+              </div>
+              <div class="metric-item">
+                <span class="metric-name">CTR Medio (Click-Through)</span>
+                <strong class="metric-val" id="secMetricCtr">-</strong>
+              </div>
+              <div class="metric-item">
+                <span class="metric-name">CPC Medio (Costo per Click)</span>
+                <strong class="metric-val" id="secMetricCpc">-</strong>
+              </div>
+              <div class="metric-item">
+                <span class="metric-name">CPM (Costo per 1.000 Impr.)</span>
+                <strong class="metric-val" id="secMetricCpm">-</strong>
+              </div>
+              <div class="metric-item">
+                <span class="metric-name">Frequenza Media</span>
+                <strong class="metric-val" id="secMetricFrequency">-</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- DETAILED DATA TABLES (TABBED NAVIGATION) -->
+        <section class="tables-section" id="tablesSection">
+          <div class="section-card">
+            <!-- Table Sub-Nav Tabs -->
+            <div class="table-nav-bar">
+              <div class="table-tabs" role="tablist">
+                <button class="table-tab active" id="tabAlertAdsBtn" type="button" data-table-tab="alert_ads">
+                  <span class="tab-icon-alert">⚠️</span>
+                  <span>Inserzioni Sopra Soglia</span>
+                  <span class="tab-badge-alert" id="tabAlertAdsBadge">0</span>
+                </button>
+                <button class="table-tab" id="tabAllAdsBtn" type="button" data-table-tab="all_ads">
+                  <span>🖼️ Tutte le Inserzioni (Ads)</span>
+                  <span class="tab-badge" id="tabAllAdsBadge">0</span>
+                </button>
+                <button class="table-tab" id="tabCampaignsBtn" type="button" data-table-tab="campaigns">
+                  <span>🎯 Campagne</span>
+                  <span class="tab-badge" id="tabCampaignsBadge">0</span>
+                </button>
+                <button class="table-tab" id="tabAdsetsBtn" type="button" data-table-tab="adsets">
+                  <span>📁 Gruppi Inserzioni (AdSets)</span>
+                  <span class="tab-badge" id="tabAdsetsBadge">0</span>
+                </button>
+              </div>
+
+              <!-- Search inside table -->
+              <div class="table-search-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input id="tableSearchInput" type="search" placeholder="Filtra per nome, ID o testo..." autocomplete="off">
+              </div>
+            </div>
+
+            <!-- Dynamic Table Container -->
+            <div class="table-responsive" id="dynamicTableContainer">
+              <div class="table-loading">Caricamento dati tabella...</div>
+            </div>
+
+            <div class="table-pagination-bar" id="tablePaginationBar">
+              <span id="tableResultsCount">Mostrati 0 risultati</span>
+              <div class="table-legend-note">
+                <span class="legend-pill pill-danger">🔴 CPL > Soglia</span>
+                <span class="legend-pill pill-warning">🟡 Spesa > Soglia (0 Lead)</span>
+                <span class="legend-pill pill-success">🟢 Costo Ottimale</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- QUICK REPORT MODAL (One-click text summary for WhatsApp / Slack) -->
+    <dialog class="modal-dialog" id="reportDialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <h2>Report Esecutivo Lead & Campagne</h2>
+          </div>
+          <button class="modal-close" id="closeReportDialogBtn" type="button" aria-label="Chiudi">✕</button>
+        </div>
+        <p class="modal-desc">Testo formattato pronto da incollare su WhatsApp, Slack, Telegram o Email per riassumere i risultati ai clienti o al team.</p>
+        
+        <textarea class="report-textarea" id="reportOutput" rows="16" readonly></textarea>
+        
+        <div class="modal-footer">
+          <div class="copy-feedback" id="reportCopyFeedback"></div>
+          <button class="btn btn-primary" id="copyReportBtn" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Copia Report negli Appunti</span>
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>

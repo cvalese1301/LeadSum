@@ -1,0 +1,15 @@
+{
+  "name": "leadsum-meta-intelligence",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LeadSum - Meta Ads Lead & Campaign Performance Intelligence Dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
+
