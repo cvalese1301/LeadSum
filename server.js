@@ -1295,10 +1295,10 @@ async function handleApi(req, res, url) {
         timeParams.date_preset = datePreset;
       }
 
-      // Fetch all clients metrics in batches
+      // Fetch all clients metrics in parallel
       const clientPromises = targetAccounts.map(async (acc) => {
         try {
-          const [insightsRes, campaignsRes] = await Promise.all([
+          const [insightsRes, campaignsRes, adsetsRes] = await Promise.all([
             graph(`/${acc.id}/insights`, {
               ...timeParams,
               fields: "spend,actions",
@@ -1307,19 +1307,39 @@ async function handleApi(req, res, url) {
 
             graph(`/${acc.id}/campaigns`, {
               fields: "id,name,status,effective_status,daily_budget",
+              effective_status: "['ACTIVE']",
+              limit: "100"
+            }).catch(() => ({ data: [] })),
+
+            graph(`/${acc.id}/adsets`, {
+              fields: "id,name,campaign_id,status,effective_status,daily_budget",
+              effective_status: "['ACTIVE']",
               limit: "100"
             }).catch(() => ({ data: [] }))
           ]);
 
           const parsed = parseInsightsMetrics(insightsRes.data?.[0] || {});
-          const campaigns = campaignsRes.data || [];
-          const activeCampaigns = campaigns.filter(c => c.status === "ACTIVE" || c.effective_status === "ACTIVE");
-          
-          let totalDailyBudget = 0;
+          const activeCampaigns = campaignsRes.data || [];
+          const activeAdsets = adsetsRes.data || [];
+          const activeCampMap = new Map(activeCampaigns.map(c => [c.id, c]));
+
+          let cboTotal = 0;
           activeCampaigns.forEach(c => {
-            const rawDaily = parseFloat(c.daily_budget || 0) / 100;
-            if (rawDaily > 0) totalDailyBudget += rawDaily;
+            const daily = parseFloat(c.daily_budget || 0) / 100;
+            if (daily > 0) cboTotal += daily;
           });
+
+          let aboTotal = 0;
+          activeAdsets.forEach(a => {
+            const parentCamp = activeCampMap.get(a.campaign_id);
+            const parentIsCBO = parentCamp && parseFloat(parentCamp.daily_budget || 0) > 0;
+            const daily = parseFloat(a.daily_budget || 0) / 100;
+            if (parentCamp && !parentIsCBO && daily > 0) {
+              aboTotal += daily;
+            }
+          });
+
+          const totalDailyBudget = Math.round((cboTotal + aboTotal) * 100) / 100;
 
           // If CPL > threshold, flag alert
           const isHighCpl = parsed.totalLeads > 0 && parsed.cpl > threshold;
@@ -1332,14 +1352,15 @@ async function handleApi(req, res, url) {
             name: acc.name,
             currency: acc.currency || "EUR",
             activeCampaignsCount: activeCampaigns.length,
-            totalCampaignsCount: campaigns.length,
             totalLeads: parsed.totalLeads,
             formLeads: parsed.formLeads,
             messagingLeads: parsed.messagingLeads,
             pixelLeads: parsed.pixelLeads,
             spend: parsed.spend,
             cpl: parsed.cpl,
-            dailyBudget: Math.round(totalDailyBudget * 100) / 100,
+            dailyBudget: totalDailyBudget,
+            cboBudget: cboTotal,
+            aboBudget: aboTotal,
             impressions: parsed.impressions,
             clicks: parsed.clicks,
             ctr: parsed.ctr,
@@ -1361,6 +1382,7 @@ async function handleApi(req, res, url) {
           };
         }
       });
+
 
       const clients = await Promise.all(clientPromises);
 
