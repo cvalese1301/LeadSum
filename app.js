@@ -4,6 +4,7 @@
 
 const STORAGE_KEYS = {
   VISIBLE_ACCOUNTS: "leadsum_visible_accounts_v2",
+  CLIENT_ORDER: "leadsum_client_order_v2",
   COST_THRESHOLD: "leadsum_cost_threshold_v2",
   DATE_PRESET: "leadsum_date_preset_v2",
   CUSTOM_SINCE: "leadsum_custom_since_v2",
@@ -22,6 +23,7 @@ const state = {
   },
   allAdAccounts: [],
   visibleAccountIds: JSON.parse(localStorage.getItem(STORAGE_KEYS.VISIBLE_ACCOUNTS) || "null"),
+  clientOrder: JSON.parse(localStorage.getItem(STORAGE_KEYS.CLIENT_ORDER) || "[]"),
   datePreset: localStorage.getItem(STORAGE_KEYS.DATE_PRESET) || "yesterday",
   customSince: localStorage.getItem(STORAGE_KEYS.CUSTOM_SINCE) || "",
   customUntil: localStorage.getItem(STORAGE_KEYS.CUSTOM_UNTIL) || "",
@@ -29,8 +31,8 @@ const state = {
   onlyActiveCampaigns: localStorage.getItem(STORAGE_KEYS.ONLY_ACTIVE) !== "false",
   clientsData: [],
   searchFilter: "",
-  sortColumn: "spend",
-  sortDirection: "desc",
+  sortColumn: "custom",
+  sortDirection: "asc",
   expandedAccountId: null,
   expandedDetailsCache: {},
   loading: false
@@ -88,6 +90,7 @@ const DOM = {
   accountModalSearchInput: document.querySelector("#accountModalSearchInput"),
   btnSelectAllAccounts: document.querySelector("#btnSelectAllAccounts"),
   btnDeselectAllAccounts: document.querySelector("#btnDeselectAllAccounts"),
+  btnResetAlphabeticalOrder: document.querySelector("#btnResetAlphabeticalOrder"),
   accountsCheckboxList: document.querySelector("#accountsCheckboxList"),
   modalSelectedCount: document.querySelector("#modalSelectedCount"),
   btnSaveAccountSelection: document.querySelector("#btnSaveAccountSelection"),
@@ -347,6 +350,30 @@ async function initApp() {
 
 
 
+function getOrderedAdAccounts() {
+  const orderMap = new Map();
+  (state.clientOrder || []).forEach((id, idx) => orderMap.set(id, idx));
+
+  return [...state.allAdAccounts].sort((a, b) => {
+    const idxA = orderMap.has(a.id) ? orderMap.get(a.id) : 999999;
+    const idxB = orderMap.has(b.id) ? orderMap.get(b.id) : 999999;
+    if (idxA !== idxB) return idxA - idxB;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
+
+function sortClientsByCustomOrder(list = []) {
+  const orderMap = new Map();
+  (state.clientOrder || []).forEach((id, idx) => orderMap.set(id, idx));
+
+  return [...list].sort((a, b) => {
+    const idxA = orderMap.has(a.id) ? orderMap.get(a.id) : 999999;
+    const idxB = orderMap.has(b.id) ? orderMap.get(b.id) : 999999;
+    if (idxA !== idxB) return idxA - idxB;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
+
 async function loadInitialAccounts() {
   try {
     const config = await api("/api/meta/config");
@@ -356,6 +383,24 @@ async function loadInitialAccounts() {
     if (!state.visibleAccountIds || !Array.isArray(state.visibleAccountIds)) {
       state.visibleAccountIds = state.allAdAccounts.map(a => a.id);
       localStorage.setItem(STORAGE_KEYS.VISIBLE_ACCOUNTS, JSON.stringify(state.visibleAccountIds));
+    }
+
+    // Ensure clientOrder is initialized and includes all accounts
+    if (!state.clientOrder || !Array.isArray(state.clientOrder) || state.clientOrder.length === 0) {
+      state.clientOrder = state.allAdAccounts.map(a => a.id);
+      localStorage.setItem(STORAGE_KEYS.CLIENT_ORDER, JSON.stringify(state.clientOrder));
+    } else {
+      const existingSet = new Set(state.clientOrder);
+      let added = false;
+      state.allAdAccounts.forEach(a => {
+        if (!existingSet.has(a.id)) {
+          state.clientOrder.push(a.id);
+          added = true;
+        }
+      });
+      if (added) {
+        localStorage.setItem(STORAGE_KEYS.CLIENT_ORDER, JSON.stringify(state.clientOrder));
+      }
     }
 
     updateAccountsButtonText();
@@ -519,35 +564,48 @@ function renderClientsTable() {
   }
 
   // Sorting
-  list.sort((a, b) => {
-    let valA, valB;
-    switch (state.sortColumn) {
-      case "name":
-        valA = (a.name || "").toLowerCase();
-        valB = (b.name || "").toLowerCase();
-        return state.sortDirection === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      case "leads":
-        valA = a.totalLeads || 0;
-        valB = b.totalLeads || 0;
-        break;
-      case "spend":
-        valA = a.spend || 0;
-        valB = b.spend || 0;
-        break;
-      case "cpl":
-        valA = a.cpl || 0;
-        valB = b.cpl || 0;
-        break;
-      case "budget":
-        valA = a.dailyBudget || 0;
-        valB = b.dailyBudget || 0;
-        break;
-      default:
-        valA = a.spend || 0;
-        valB = b.spend || 0;
-    }
-    return state.sortDirection === "asc" ? valA - valB : valB - valA;
-  });
+  if (state.sortColumn === "custom") {
+    const orderMap = new Map();
+    (state.clientOrder || []).forEach((id, idx) => orderMap.set(id, idx));
+    list.sort((a, b) => {
+      const posA = orderMap.has(a.id) ? orderMap.get(a.id) : 999999;
+      const posB = orderMap.has(b.id) ? orderMap.get(b.id) : 999999;
+      if (posA !== posB) {
+        return state.sortDirection === "asc" ? posA - posB : posB - posA;
+      }
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  } else {
+    list.sort((a, b) => {
+      let valA, valB;
+      switch (state.sortColumn) {
+        case "name":
+          valA = (a.name || "").toLowerCase();
+          valB = (b.name || "").toLowerCase();
+          return state.sortDirection === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case "leads":
+          valA = a.totalLeads || 0;
+          valB = b.totalLeads || 0;
+          break;
+        case "spend":
+          valA = a.spend || 0;
+          valB = b.spend || 0;
+          break;
+        case "cpl":
+          valA = a.cpl || 0;
+          valB = b.cpl || 0;
+          break;
+        case "budget":
+          valA = a.dailyBudget || 0;
+          valB = b.dailyBudget || 0;
+          break;
+        default:
+          valA = a.spend || 0;
+          valB = b.spend || 0;
+      }
+      return state.sortDirection === "asc" ? valA - valB : valB - valA;
+    });
+  }
 
   if (DOM.footerRowsCount) {
     DOM.footerRowsCount.textContent = `${list.length} clienti mostrati`;
@@ -809,8 +867,10 @@ window.toggleAdStatusInline = async function(adId, newStatus, accountId) {
 };
 
 /* ==========================================================================
-   Account Selection Modal ("Quali account vedere e quali no")
+   Account Selection & Ordering Modal ("Gestione & Ordinamento Clienti")
    ========================================================================== */
+
+let draggedAccountId = null;
 
 function openAccountsModal() {
   renderAccountsCheckboxList();
@@ -822,16 +882,33 @@ function renderAccountsCheckboxList() {
   if (!container) return;
 
   const search = (DOM.accountModalSearchInput?.value || "").toLowerCase().trim();
-  const accounts = state.allAdAccounts.filter(a => (a.name || "").toLowerCase().includes(search) || (a.id || "").toLowerCase().includes(search));
+  const orderedAccounts = getOrderedAdAccounts();
+  const filteredAccounts = orderedAccounts.filter(a =>
+    (a.name || "").toLowerCase().includes(search) || (a.id || "").toLowerCase().includes(search)
+  );
 
-  const itemsHtml = accounts.map(a => {
+  const itemsHtml = filteredAccounts.map((a) => {
     const isChecked = state.visibleAccountIds.includes(a.id);
+    const orderIndex = orderedAccounts.findIndex(x => x.id === a.id) + 1;
+    const isFirst = orderIndex === 1;
+    const isLast = orderIndex === orderedAccounts.length;
+
     return `
-      <label class="account-checkbox-item">
-        <input type="checkbox" value="${a.id}" ${isChecked ? "checked" : ""} onchange="handleAccountCheckboxToggle('${a.id}', this.checked)">
-        <span class="account-item-title">${a.name}</span>
-        <span class="account-item-id">${a.id}</span>
-      </label>
+      <div class="account-order-item" draggable="true" data-account-id="${a.id}" ondragstart="handleAccountDragStart(event, '${a.id}')" ondragover="handleAccountDragOver(event)" ondrop="handleAccountDrop(event, '${a.id}')" ondragend="handleAccountDragEnd(event)">
+        <span class="order-drag-handle" title="Trascina per riordinare">⠿</span>
+        <span class="order-badge">#${orderIndex}</span>
+        <label class="account-checkbox-label">
+          <input type="checkbox" value="${a.id}" ${isChecked ? "checked" : ""} onchange="handleAccountCheckboxToggle('${a.id}', this.checked)">
+          <div class="account-item-info">
+            <span class="account-item-title">${a.name}</span>
+            <span class="account-item-id">${a.id}</span>
+          </div>
+        </label>
+        <div class="account-reorder-actions">
+          <button type="button" class="btn-reorder-move" onclick="moveAccountOrder('${a.id}', -1)" title="Sposta Su" ${isFirst ? "disabled" : ""}>▲</button>
+          <button type="button" class="btn-reorder-move" onclick="moveAccountOrder('${a.id}', 1)" title="Sposta Giù" ${isLast ? "disabled" : ""}>▼</button>
+        </div>
+      </div>
     `;
   }).join("");
 
@@ -841,6 +918,67 @@ function renderAccountsCheckboxList() {
     DOM.modalSelectedCount.textContent = `${state.visibleAccountIds.length} su ${state.allAdAccounts.length} account selezionati`;
   }
 }
+
+window.moveAccountOrder = function(accountId, direction) {
+  const currentOrder = getOrderedAdAccounts().map(a => a.id);
+  const fromIndex = currentOrder.indexOf(accountId);
+  if (fromIndex === -1) return;
+
+  const toIndex = fromIndex + direction;
+  if (toIndex < 0 || toIndex >= currentOrder.length) return;
+
+  const [movedId] = currentOrder.splice(fromIndex, 1);
+  currentOrder.splice(toIndex, 0, movedId);
+
+  state.clientOrder = currentOrder;
+  renderAccountsCheckboxList();
+};
+
+window.handleAccountDragStart = function(e, accountId) {
+  draggedAccountId = accountId;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", accountId);
+  e.currentTarget.classList.add("is-dragging");
+};
+
+window.handleAccountDragOver = function(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const item = e.currentTarget.closest(".account-order-item");
+  if (item) item.classList.add("drag-over");
+};
+
+window.handleAccountDrop = function(e, targetAccountId) {
+  e.preventDefault();
+  const item = e.currentTarget.closest(".account-order-item");
+  if (item) item.classList.remove("drag-over");
+
+  if (!draggedAccountId || draggedAccountId === targetAccountId) return;
+
+  const currentOrder = getOrderedAdAccounts().map(a => a.id);
+  const fromIndex = currentOrder.indexOf(draggedAccountId);
+  const toIndex = currentOrder.indexOf(targetAccountId);
+
+  if (fromIndex !== -1 && toIndex !== -1) {
+    const [movedId] = currentOrder.splice(fromIndex, 1);
+    currentOrder.splice(toIndex, 0, movedId);
+    state.clientOrder = currentOrder;
+    renderAccountsCheckboxList();
+  }
+};
+
+window.handleAccountDragEnd = function(e) {
+  draggedAccountId = null;
+  document.querySelectorAll(".account-order-item").forEach(el => {
+    el.classList.remove("is-dragging", "drag-over");
+  });
+};
+
+window.resetAccountsAlphabeticalOrder = function() {
+  const sorted = [...state.allAdAccounts].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  state.clientOrder = sorted.map(a => a.id);
+  renderAccountsCheckboxList();
+};
 
 window.handleAccountCheckboxToggle = function(accountId, isChecked) {
   if (isChecked) {
@@ -855,7 +993,11 @@ window.handleAccountCheckboxToggle = function(accountId, isChecked) {
 };
 
 function saveAccountSelection() {
+  if (!state.clientOrder || state.clientOrder.length === 0) {
+    state.clientOrder = state.allAdAccounts.map(a => a.id);
+  }
   localStorage.setItem(STORAGE_KEYS.VISIBLE_ACCOUNTS, JSON.stringify(state.visibleAccountIds));
+  localStorage.setItem(STORAGE_KEYS.CLIENT_ORDER, JSON.stringify(state.clientOrder));
   updateAccountsButtonText();
   DOM.modalAccounts?.close();
   state.expandedDetailsCache = {};
@@ -868,27 +1010,19 @@ function saveAccountSelection() {
 
 function openReportModal() {
   const clients = state.clientsData;
-  const totalLeads = clients.reduce((sum, c) => sum + (c.totalLeads || 0), 0);
-  const totalSpend = clients.reduce((sum, c) => sum + (c.spend || 0), 0);
-  const totalBudget = clients.reduce((sum, c) => sum + (c.dailyBudget || 0), 0);
-  const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
-
   const dateLabel = getPresetLabel(state.datePreset).toUpperCase();
   const now = new Date().toLocaleDateString("it-IT");
 
-  const clientsLines = clients
+  // Sort according to custom client order
+  const orderedClients = sortClientsByCustomOrder(clients);
+
+  const clientsLines = orderedClients
     .filter(c => c.spend > 0 || c.totalLeads > 0 || (c.dailyBudget || 0) > 0)
-    .sort((a, b) => b.totalLeads - a.totalLeads || b.spend - a.spend)
     .map(c => `• *${c.name}*: ${c.totalLeads} lead | Spesa: ${formatCurrency(c.spend)} | CPL: ${c.totalLeads > 0 ? formatCurrency(c.cpl) : "-"} | Budget: ${formatCurrency(c.dailyBudget)}/gg${c.alertAdsCount > 0 ? ` (⚠️ ${c.alertAdsCount} > soglia)` : ""}`)
     .join("\n");
 
   const reportText = `📊 *RIASSUNTO CLIENTI META ADS - ${dateLabel}*
 📅 Data: ${now}
-────────────────────────
-👥 *CONTATTI TOTALI*: ${formatNumber(totalLeads)} lead
-💶 *SPESA TOTALE*: ${formatCurrency(totalSpend)}
-🎯 *CPL MEDIO*: ${formatCurrency(avgCpl)}
-⏱️ *BUDGET GG ATTIVO*: ${formatCurrency(totalBudget)}/gg
 ────────────────────────
 *DETTAGLIO PER CLIENTE:*
 ${clientsLines || "Nessun dato di spesa nel periodo."}
@@ -963,11 +1097,23 @@ function bindEvents() {
   DOM.tableHeaders.forEach(th => {
     th.addEventListener("click", () => {
       const col = th.dataset.sort;
-      if (state.sortColumn === col) {
-        state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
+      if (col === "name") {
+        if (state.sortColumn === "custom") {
+          state.sortColumn = "name";
+          state.sortDirection = "asc";
+        } else if (state.sortColumn === "name" && state.sortDirection === "asc") {
+          state.sortDirection = "desc";
+        } else {
+          state.sortColumn = "custom";
+          state.sortDirection = "asc";
+        }
       } else {
-        state.sortColumn = col;
-        state.sortDirection = "desc";
+        if (state.sortColumn === col) {
+          state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
+        } else {
+          state.sortColumn = col;
+          state.sortDirection = "desc";
+        }
       }
       renderClientsTable();
     });
@@ -993,6 +1139,8 @@ function bindEvents() {
     state.visibleAccountIds = [];
     renderAccountsCheckboxList();
   });
+
+  DOM.btnResetAlphabeticalOrder?.addEventListener("click", resetAccountsAlphabeticalOrder);
 
   DOM.btnSaveAccountSelection?.addEventListener("click", saveAccountSelection);
 

@@ -17,40 +17,72 @@ const testAccounts = [
   { id: 'act_135241018772815', name: 'Cesena Sub' }
 ];
 
-async function inspect(acc) {
-  const cUrl = `https://graph.facebook.com/v22.0/${acc.id}/campaigns?fields=id,name,status,effective_status,daily_budget,lifetime_budget&effective_status=['ACTIVE']&limit=100&access_token=${token}`;
-  const cRes = await fetch(cUrl).then(r => r.json());
-  const activeCampaigns = cRes.data || [];
+async function testAllAccounts() {
+  for (const acc of testAccounts) {
+    const [cRes, aRes, adRes] = await Promise.all([
+      fetch(`https://graph.facebook.com/v22.0/${acc.id}/campaigns?fields=id,name,status,effective_status,daily_budget,lifetime_budget&limit=100&access_token=${token}`).then(r => r.json()),
+      fetch(`https://graph.facebook.com/v22.0/${acc.id}/adsets?fields=id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget&limit=100&access_token=${token}`).then(r => r.json()),
+      fetch(`https://graph.facebook.com/v22.0/${acc.id}/ads?fields=id,name,campaign_id,adset_id,status,effective_status&limit=100&access_token=${token}`).then(r => r.json())
+    ]);
 
-  const aUrl = `https://graph.facebook.com/v22.0/${acc.id}/adsets?fields=id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget&effective_status=['ACTIVE']&limit=100&access_token=${token}`;
-  const aRes = await fetch(aUrl).then(r => r.json());
-  const activeAdsets = aRes.data || [];
+    const campaigns = cRes.data || [];
+    const adsets = aRes.data || [];
+    const ads = adRes.data || [];
 
-  const activeCampMap = new Map(activeCampaigns.map(c => [c.id, c]));
-  let cboTotal = 0;
-  activeCampaigns.forEach(c => {
-    const daily = parseFloat(c.daily_budget || 0) / 100;
-    if (daily > 0) cboTotal += daily;
-  });
+    const activeCampIds = new Set(campaigns.filter(c => c.status === 'ACTIVE' || c.effective_status === 'ACTIVE').map(c => c.id));
+    const activeAdsetIds = new Set(adsets.filter(a => a.status === 'ACTIVE' || a.effective_status === 'ACTIVE').map(a => a.id));
 
-  let aboTotal = 0;
-  activeAdsets.forEach(a => {
-    const parentCamp = activeCampMap.get(a.campaign_id);
-    const parentIsCBO = parentCamp && parseFloat(parentCamp.daily_budget || 0) > 0;
-    const daily = parseFloat(a.daily_budget || 0) / 100;
-    if (parentCamp && !parentIsCBO && daily > 0) {
-      aboTotal += daily;
+    // An ad is considered active if effective_status === 'ACTIVE' OR (status === 'ACTIVE' and its parent adset and campaign are active)
+    const trulyActiveAdsetsWithAds = new Set();
+    const trulyActiveCampaignsWithAds = new Set();
+
+    ads.forEach(ad => {
+      const isAdActive = ad.effective_status === 'ACTIVE' || (ad.status === 'ACTIVE' && activeAdsetIds.has(ad.adset_id) && activeCampIds.has(ad.campaign_id));
+      if (isAdActive) {
+        trulyActiveAdsetsWithAds.add(ad.adset_id);
+        trulyActiveCampaignsWithAds.add(ad.campaign_id);
+      }
+    });
+
+    const activeCampMap = new Map(campaigns.filter(c => activeCampIds.has(c.id)).map(c => [c.id, c]));
+
+    let cboTotal = 0;
+    campaigns.forEach(c => {
+      const isCampActive = activeCampIds.has(c.id);
+      const daily = parseFloat(c.daily_budget || 0) / 100;
+      const hasActiveAd = trulyActiveCampaignsWithAds.has(c.id);
+      if (isCampActive && hasActiveAd && daily > 0) {
+        cboTotal += daily;
+      }
+    });
+
+    let aboTotal = 0;
+    adsets.forEach(a => {
+      const parentCamp = activeCampMap.get(a.campaign_id);
+      const isCampActive = activeCampIds.has(a.campaign_id);
+      const isAdsetActive = activeAdsetIds.has(a.id);
+      const parentIsCBO = parentCamp && parseFloat(parentCamp.daily_budget || 0) > 0;
+      const hasActiveAd = trulyActiveAdsetsWithAds.has(a.id);
+      const daily = parseFloat(a.daily_budget || 0) / 100;
+
+      if (isCampActive && isAdsetActive && !parentIsCBO && hasActiveAd && daily > 0) {
+        aboTotal += daily;
+      }
+    });
+
+    const totalBudget = Math.round((cboTotal + aboTotal) * 100) / 100;
+
+    console.log(`\nClient: ${acc.name} (${acc.id})`);
+    console.log(`  Campaigns: ${campaigns.length} (Active: ${activeCampIds.size}), AdSets: ${adsets.length} (Active: ${activeAdsetIds.size}), Ads: ${ads.length} (Active: ${ads.filter(a => a.status === 'ACTIVE' || a.effective_status === 'ACTIVE').length})`);
+    console.log(`  Active CBO: €${cboTotal}/gg, Active ABO: €${aboTotal}/gg => TOTAL ACTIVE DAILY BUDGET: €${totalBudget}/gg`);
+    if (ads.length > 0) {
+      ads.forEach(ad => {
+        console.log(`    - Ad "${ad.name}": status=${ad.status}, effective_status=${ad.effective_status}, campaign_id=${ad.campaign_id}, adset_id=${ad.adset_id}`);
+      });
     }
-  });
-
-  const total = Math.round((cboTotal + aboTotal) * 100) / 100;
-  console.log(`${acc.name} (${acc.id}) -> CBO: €${cboTotal} | ABO: €${aboTotal} | TOTAL BUDGET ATTIVO: €${total}/gg (Attive: ${activeCampaigns.length} camp, ${activeAdsets.length} adsets)`);
-}
-
-async function run() {
-  for (const a of testAccounts) {
-    await inspect(a);
   }
 }
 
-run();
+testAllAccounts().catch(console.error);
+
+

@@ -226,20 +226,21 @@
       </section>
     </main>
 
-    <!-- MODAL: GESTIONE ACCOUNT VISIBILI -->
+    <!-- MODAL: GESTIONE & ORDINAMENTO CLIENTI -->
     <dialog class="modal" id="modalAccounts">
       <div class="modal-box">
         <div class="modal-head">
-          <h3>⚙️ Gestione Clienti & Account Visibili</h3>
+          <h3>⚙️ Gestione & Ordinamento Clienti</h3>
           <button class="modal-close-btn" id="btnCloseAccountsModal" type="button">✕</button>
         </div>
-        <p class="modal-sub">Seleziona quali account vuoi visualizzare nella tua dashboard principale. Le preferenze vengono salvate automaticamente.</p>
+        <p class="modal-sub">Seleziona quali account visualizzare e imposta l'ordine personalizzato trascinandoli (⠿) o con le frecce ▲/▼. L'ordine viene applicato alla tabella e al report.</p>
         
         <div class="accounts-modal-search">
           <input id="accountModalSearchInput" type="search" placeholder="Filtra account per nome..." autocomplete="off">
           <div class="modal-quick-actions">
             <button class="btn btn-xs" id="btnSelectAllAccounts" type="button">Seleziona Tutti</button>
             <button class="btn btn-xs" id="btnDeselectAllAccounts" type="button">Deseleziona Tutti</button>
+            <button class="btn btn-xs" id="btnResetAlphabeticalOrder" type="button" title="Ordina alfabeticamente A-Z">Ordina A-Z</button>
           </div>
         </div>
 

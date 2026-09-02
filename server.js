@@ -333,47 +333,94 @@ function parseInsightsMetrics(row = {}) {
   };
 }
 
-function calculateActiveDailyBudgets(campaigns = [], adsets = []) {
+function calculateActiveDailyBudgets(campaigns = [], adsets = [], ads = []) {
   let totalDailyBudget = 0;
+  let cboActiveBudget = 0;
+  let aboActiveBudget = 0;
   const campaignBudgetMap = {};
   const adsetBudgetMap = {};
 
+  // 1. Identify active campaigns
   const activeCampaigns = campaigns.filter(c => c.status === "ACTIVE" || c.effective_status === "ACTIVE");
   const activeCampaignIds = new Set(activeCampaigns.map(c => c.id));
 
+  // 2. Identify active adsets (must have active status AND parent campaign active)
+  const activeAdsets = adsets.filter(a => {
+    const isStatusActive = a.status === "ACTIVE" || a.effective_status === "ACTIVE";
+    const isParentActive = activeCampaignIds.has(a.campaign_id);
+    return isStatusActive && isParentActive;
+  });
+  const activeAdsetIds = new Set(activeAdsets.map(a => a.id));
+
+  // 3. Identify active ads (must have active status AND parent adset active AND parent campaign active)
+  const activeCampaignIdsWithActiveAds = new Set();
+  const activeAdsetIdsWithActiveAds = new Set();
+
+  ads.forEach(ad => {
+    const isAdActive = (ad.status === "ACTIVE" || ad.effective_status === "ACTIVE") &&
+                       activeAdsetIds.has(ad.adset_id) &&
+                       activeCampaignIds.has(ad.campaign_id);
+    if (isAdActive) {
+      activeAdsetIdsWithActiveAds.add(ad.adset_id);
+      activeCampaignIdsWithActiveAds.add(ad.campaign_id);
+    }
+  });
+
+  // 4. Map & calculate CBO daily budgets
+  // Strictly active only if: campaign is active AND has active ad set AND has active ad
   campaigns.forEach(c => {
     const rawDaily = parseFloat(c.daily_budget || 0) / 100;
     const rawLifetime = parseFloat(c.lifetime_budget || 0) / 100;
     const isCBO = rawDaily > 0 || rawLifetime > 0;
+    const isStrictlyActiveCBO = activeCampaignIds.has(c.id) && activeCampaignIdsWithActiveAds.has(c.id) && rawDaily > 0;
+
     campaignBudgetMap[c.id] = {
       isCBO,
       dailyBudget: rawDaily,
       lifetimeBudget: rawLifetime,
-      type: isCBO ? (rawDaily > 0 ? "CBO Giornaliero" : "CBO Totale") : "ABO"
+      type: isCBO ? (rawDaily > 0 ? "CBO Giornaliero" : "CBO Totale") : "ABO",
+      isActiveDaily: isStrictlyActiveCBO
     };
 
-    if (activeCampaignIds.has(c.id) && rawDaily > 0) {
+    if (isStrictlyActiveCBO) {
       totalDailyBudget += rawDaily;
+      cboActiveBudget += rawDaily;
     }
   });
 
+  // 5. Map & calculate ABO daily budgets
+  // Strictly active only if: parent campaign is active AND adset is active AND adset has active ad AND not CBO
   adsets.forEach(a => {
     const rawDaily = parseFloat(a.daily_budget || 0) / 100;
     const rawLifetime = parseFloat(a.lifetime_budget || 0) / 100;
     const parentCBO = campaignBudgetMap[a.campaign_id]?.isCBO;
 
+    const isStrictlyActiveABO = !parentCBO &&
+                               activeCampaignIds.has(a.campaign_id) &&
+                               activeAdsetIds.has(a.id) &&
+                               activeAdsetIdsWithActiveAds.has(a.id) &&
+                               rawDaily > 0;
+
     adsetBudgetMap[a.id] = {
       dailyBudget: rawDaily,
       lifetimeBudget: rawLifetime,
-      isABO: !parentCBO && rawDaily > 0
+      isABO: !parentCBO && rawDaily > 0,
+      isActiveDaily: isStrictlyActiveABO
     };
 
-    if (activeCampaignIds.has(a.campaign_id) && !parentCBO && (a.status === "ACTIVE" || a.effective_status === "ACTIVE") && rawDaily > 0) {
+    if (isStrictlyActiveABO) {
       totalDailyBudget += rawDaily;
+      aboActiveBudget += rawDaily;
     }
   });
 
-  return { totalDailyBudget: Math.round(totalDailyBudget * 100) / 100, campaignBudgetMap, adsetBudgetMap };
+  return {
+    totalDailyBudget: Math.round(totalDailyBudget * 100) / 100,
+    cboActiveBudget: Math.round(cboActiveBudget * 100) / 100,
+    aboActiveBudget: Math.round(aboActiveBudget * 100) / 100,
+    campaignBudgetMap,
+    adsetBudgetMap
+  };
 }
 
 function getDemoInsightsData(datePreset = "last_7d") {
@@ -872,7 +919,7 @@ async function fetchLiveInsightsSummary(accountId, query = {}, accessToken = tok
   const adsets = adsetsRes.data || [];
   const ads = adsRes.data || [];
 
-  const { totalDailyBudget, campaignBudgetMap, adsetBudgetMap } = calculateActiveDailyBudgets(campaigns, adsets);
+  const { totalDailyBudget, cboActiveBudget, aboActiveBudget, campaignBudgetMap, adsetBudgetMap } = calculateActiveDailyBudgets(campaigns, adsets, ads);
 
   const [accountInsightsRes, todayInsightsRes, yesterdayInsightsRes, campaignInsightsRes, adsetInsightsRes, adInsightsRes] = await Promise.all([
     graph(`/${accountId}/insights`, {
@@ -1322,7 +1369,7 @@ async function handleApi(req, res, url) {
       // Fetch all clients metrics in parallel
       const clientPromises = targetAccounts.map(async (acc) => {
         try {
-          const [insightsRes, campaignsRes, adsetsRes] = await Promise.all([
+          const [insightsRes, campaignsRes, adsetsRes, adsRes] = await Promise.all([
             graph(`/${acc.id}/insights`, {
               ...timeParams,
               fields: "spend,actions",
@@ -1330,40 +1377,34 @@ async function handleApi(req, res, url) {
             }, userToken).catch(() => ({ data: [] })),
 
             graph(`/${acc.id}/campaigns`, {
-              fields: "id,name,status,effective_status,daily_budget",
+              fields: "id,name,status,effective_status,daily_budget,lifetime_budget",
               effective_status: "['ACTIVE']",
               limit: "100"
             }, userToken).catch(() => ({ data: [] })),
 
             graph(`/${acc.id}/adsets`, {
-              fields: "id,name,campaign_id,status,effective_status,daily_budget",
+              fields: "id,name,campaign_id,status,effective_status,daily_budget,lifetime_budget",
               effective_status: "['ACTIVE']",
-              limit: "100"
+              limit: "150"
+            }, userToken).catch(() => ({ data: [] })),
+
+            graph(`/${acc.id}/ads`, {
+              fields: "id,name,campaign_id,adset_id,status,effective_status",
+              effective_status: "['ACTIVE']",
+              limit: "250"
             }, userToken).catch(() => ({ data: [] }))
           ]);
 
           const parsed = parseInsightsMetrics(insightsRes.data?.[0] || {});
           const activeCampaigns = campaignsRes.data || [];
           const activeAdsets = adsetsRes.data || [];
-          const activeCampMap = new Map(activeCampaigns.map(c => [c.id, c]));
+          const activeAds = adsRes.data || [];
 
-          let cboTotal = 0;
-          activeCampaigns.forEach(c => {
-            const daily = parseFloat(c.daily_budget || 0) / 100;
-            if (daily > 0) cboTotal += daily;
-          });
-
-          let aboTotal = 0;
-          activeAdsets.forEach(a => {
-            const parentCamp = activeCampMap.get(a.campaign_id);
-            const parentIsCBO = parentCamp && parseFloat(parentCamp.daily_budget || 0) > 0;
-            const daily = parseFloat(a.daily_budget || 0) / 100;
-            if (parentCamp && !parentIsCBO && daily > 0) {
-              aboTotal += daily;
-            }
-          });
-
-          const totalDailyBudget = Math.round((cboTotal + aboTotal) * 100) / 100;
+          const { totalDailyBudget, cboActiveBudget, aboActiveBudget } = calculateActiveDailyBudgets(
+            activeCampaigns,
+            activeAdsets,
+            activeAds
+          );
 
           // If CPL > threshold, flag alert
           const isHighCpl = parsed.totalLeads > 0 && parsed.cpl > threshold;
@@ -1384,8 +1425,8 @@ async function handleApi(req, res, url) {
             spend: parsed.spend,
             cpl: parsed.cpl,
             dailyBudget: totalDailyBudget,
-            cboBudget: cboTotal,
-            aboBudget: aboTotal,
+            cboBudget: cboActiveBudget,
+            aboBudget: aboActiveBudget,
             impressions: parsed.impressions,
             clicks: parsed.clicks,
             ctr: parsed.ctr,
